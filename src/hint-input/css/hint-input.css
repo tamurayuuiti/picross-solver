@@ -1,0 +1,261 @@
+/* --------------------------------------------------------------------------
+   ヒント入力 UI 共通レイアウト
+   ・.hints-inputs: ヒント入力欄全体を横並び&中央配置
+   -------------------------------------------------------------------------- */
+.hints-inputs {
+  display: flex;
+  gap: 32px;
+  justify-content: center;
+  margin-bottom: 18px;
+}
+
+/* --------------------------------------------------------------------------
+   行番号付きエディタ風スタイル
+   -------------------------------------------------------------------------- */
+
+/* ラベル表示領域 */
+.hint-label-area {
+  width: 100%;
+  min-width: 180px;
+  max-width: 260px;
+}
+.hint-label-area label {
+  font-weight: bold;
+  color: #2563c9;
+  margin-bottom: 4px;
+  display: block;
+  letter-spacing: 0.02em;
+  font-size: 1.03em;
+}
+
+/* スクロールコンテナ */
+.scroll-container {
+  width: 220px;
+  height: 220px;
+  overflow-y: auto;
+  border: 1.5px solid #bbb;
+  background: #f8fafc;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px #0001;
+  margin-bottom: 8px;
+}
+
+/* エディタ内テーブル */
+.editor-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #f8fafc;
+}
+.editor-table td {
+  vertical-align: top;
+  padding: 0;
+}
+
+/* 行番号 */
+.line-number {
+  width: 54px;
+  background: #f2f6fa;
+  color: #666;
+  text-align: right;
+  padding: 4px 5px;
+  border-right: 1px solid #ccc;
+  user-select: none;
+  font-family: 'monospace', 'Meiryo', sans-serif;
+  font-size: 1em;
+  border-radius: 6px 0 0 6px;
+  white-space: nowrap;
+}
+
+/* 行内容 */
+.line-content {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 5px;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  font-family: 'monospace', 'Meiryo', sans-serif;
+  font-size: 1em;
+  outline: none;
+  border: none;
+  background: transparent;
+  border-radius: 0 6px 6px 0;
+  transition: background 0.2s;
+}
+.line-content[contenteditable] {
+  outline: none;
+}
+
+/* ホバー/フォーカス時の背景色 */
+.line-row:hover .line-content,
+.line-content:focus {
+  background: #eaf4ff;
+}
+
+/* --------------------------------------------------------------------------
+   テキストボックス型スタイル（行毎入力）
+   -------------------------------------------------------------------------- */
+.textbox-hint-area {
+  width: 100%;
+  padding: 0 200px;
+  box-sizing: border-box;
+}
+.textbox-hint-line {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+  gap: 6px;
+}
+.textbox-hint-label {
+  width: 48px;
+  color: #2563c9;
+  font-family: 'monospace', 'Meiryo', sans-serif;
+  font-size: 1em;
+  text-align: right;
+  user-select: none;
+  margin-right: 4px;
+}
+.textbox-hint-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 6px;
+  font-size: 1em;
+  font-family: 'monospace', 'Meiryo', sans-serif;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  background: #fff;
+  transition: border 0.2s, background 0.2s;
+}
+.textbox-hint-input:focus {
+  border-color: #2563c9;
+  background: #eaf4ff;
+  outline: none;
+}
+
+/* --------------------------------------------------------------------------
+   シンプルテキストボックス型スタイル
+   -------------------------------------------------------------------------- */
+.simple-hint-block {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0 18px;
+  flex: 1 1 0;
+  min-width: 180px;
+  max-width: 320px;
+}
+.simple-hint-block label {
+  font-weight: bold;
+  color: #2563c9;
+  margin-bottom: 6px;
+  font-size: 1.05em;
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+.simple-hint-textbox {
+  width: 98%;
+  min-width: 120px;
+  max-width: 260px;
+  min-height: 120px;
+  max-height: 225px;
+  font-size: 1.08em;
+  font-family: 'monospace', 'Meiryo', sans-serif;
+  border: 1.5px solid #bbb;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 0 auto 8px;
+  box-sizing: border-box;
+  background: #f8fafc;
+  transition: border 0.2s, background 0.2s;
+  resize: none;
+}
+
+/* --------------------------------------------------------------------------
+   スタイル切り替え UI
+   -------------------------------------------------------------------------- */
+.hint-style-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 18px;
+  margin-bottom: 18px;
+  font-size: 0.98em;
+  color: #2563c9;
+  user-select: none;
+}
+.hint-style-switch label {
+  margin: 0;
+  font-weight: normal;
+  cursor: pointer;
+}
+
+/* --------------------------------------------------------------------------
+   内部レイアウト: ヒント入力欄間スペース調整
+   -------------------------------------------------------------------------- */
+.hint-inputs-inner,
+#hintInputTextboxBlock {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  justify-content: center;
+}
+.hint-inputs-inner {
+  gap: 61px; /* エディタ風ヒント入力欄間のスペース調整 */
+}
+#hintInputTextboxBlock {
+  gap: 20px;
+}
+
+/* --------------------------------------------------------------------------
+   レスポンシブ対応（max-width: 600px）
+   ・サイズ縮小、フォント・パディング調整、flex方向変更
+   -------------------------------------------------------------------------- */
+@media (max-width: 600px) {
+  .scroll-container {
+    width: 120px;
+    height: 120px;
+  }
+  .hint-label-area {
+    min-width: 80px;
+    max-width: 120px;
+  }
+  .line-number {
+    width: 34px;
+    font-size: 0.85em;
+    padding: 2px;
+  }
+  .line-content {
+    font-size: 0.85em;
+    padding: 2px;
+  }
+  .textbox-hint-label {
+    width: 28px;
+    font-size: 0.85em;
+  }
+  .textbox-hint-input {
+    font-size: 0.85em;
+    padding: 2px 4px;
+  }
+  .simple-hint-block {
+    min-width: 80px;
+    max-width: 120px;
+    margin: 0 4px;
+  }
+  .simple-hint-textbox {
+    min-width: 60px;
+    max-width: 120px;
+    min-height: 60px;
+    max-height: 160px;
+    font-size: 0.95em;
+    padding: 4px 6px;
+  }
+  .hints-inputs,
+  .hint-inputs-inner {
+    flex-direction: column;
+    gap: 12px;
+  }
+  #hintInputTextboxBlock {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
