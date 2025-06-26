@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>Picross Solver</title>
+  <link rel="stylesheet" href="src/global/style.css">
+  <link rel="stylesheet" href="src/hint-input/css/hint-input.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Picross Solver</h1>
+    <div class="settings">
+      <label>行数: <input type="number" id="rowSize" min="1" max="200" value="20"></label>
+      <label>列数: <input type="number" id="colSize" min="1" max="200" value="20"></label>
+      <button id="generateGridBtn">グリッド生成</button>
+    </div>
+    <div class="main-area">
+      <div class="grid-hint-wrapper">
+        <div class="hint-style-switch">
+          <label style="font-weight:normal;">
+            <input type="radio" name="hintStyle" id="hintStyleTextbox" value="textbox" checked>
+            テキストボックス
+          </label>
+          <label style="font-weight:normal; margin-left:8px;">
+            <input type="radio" name="hintStyle" id="hintStyleEditor" value="editor">
+            エディタ風
+          </label>
+        </div>
+        <div class="hints-inputs">
+          <!-- 動的生成用: 空のコンテナだけを残す -->
+          <div id="hintInputTextboxBlock" style="display:block;"></div>
+
+          <!-- エディタ風 UI -->
+          <div id="hintInputEditorBlock" style="display:none; flex-direction: column; align-items: center;">
+            <div class="hint-inputs-inner">
+              <div class="hint-label-area">
+                <label style="text-align: center; display: block; margin-bottom: 8px;">行（横方向）ヒント</label>
+                <div class="scroll-container" id="rowHintScroll">
+                  <table class="editor-table" id="rowHintTable"><tbody></tbody></table>
+                </div>
+              </div>
+              <div class="hint-label-area">
+                <label style="text-align: center; display: block; margin-bottom: 8px;">列（縦方向）ヒント</label>
+                <div class="scroll-container" id="colHintScroll">
+                  <table class="editor-table" id="colHintTable"><tbody></tbody></table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <div class="actions-flex">
+            <button id="solveBtn" disabled>解く</button>
+            <div class="action-info">
+              <span id="time"></span>
+              <span id="count"></span>
+            </div>
+          </div>
+        </div>
+        <div id="picrossArea"></div>
+        <div id="previewArea"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="src/solver/solver.js"></script>
+  <script type="module" src="src/hint-input/js/hint-input.js"></script>
+  <script type="module" src="src/global/main.js"></script>
+</body>
+</html>
