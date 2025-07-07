@@ -101,9 +101,10 @@ function startTimer() {
 // --------------------------------------------------------------------------
 // エラー表示
 // --------------------------------------------------------------------------
-window.showErrorPopup = function(msg) {
+window.AppHints = window.AppHints || {};
+window.AppHints.showErrorPopup = function(msg) {
   alert(msg);
-}
+};
 
 // --------------------------------------------------------------------------
 // グローバル公開
@@ -123,8 +124,8 @@ document.getElementById('generateGridBtn').addEventListener('click', () => {
   const rows = parseInt(document.getElementById('rowSize').value, 10) || 15;
   const cols = parseInt(document.getElementById('colSize').value, 10) || 15;
   createPicrossArea(rows, cols);
-  if (window.resetEditors) {
-    window.resetEditors(rows, cols);
+  if (window.AppHints?.resetEditors) {
+    window.AppHints.resetEditors(rows, cols);
   }
 });
 

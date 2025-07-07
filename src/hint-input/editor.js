@@ -118,29 +118,8 @@ export function parseHintsEditor(lines) {
 }
 
 // --------------------------------------------------------------------------
-// エディタ風ヒント入力欄の値取得・バリデーション
+// エディタ風ヒント入力欄のリセット
 // --------------------------------------------------------------------------
-export function getHints(rows, cols) {
-  const rowLines = getEditorValues('rowHintTable');
-  const colLines = getEditorValues('colHintTable');
-  if (rowLines.length !== rows || colLines.length !== cols) {
-    showErrorPopup(`行ヒントは${rows}行、列ヒントは${cols}行で入力してください`);
-    return null;
-  }
-  const rowHints = parseHintsEditor(rowLines);
-  const colHints = parseHintsEditor(colLines);
-
-  // validateHintsを利用してバリデーション
-  if (window.validateHints) {
-    const { errors } = window.validateHints(rowHints, colHints);
-    if (errors && errors.length > 0) {
-      showErrorPopup(errors.join('\n'));
-      return null;
-    }
-  }
-  return { rowHints, colHints };
-}
-
 export function resetEditors(rows, cols) {
   createEditorRows('rowHintTable', rows);
   createEditorRows('colHintTable', cols);

@@ -7,10 +7,10 @@ export async function handleSolveButtonClick() {
   const rows = parseInt(document.getElementById('rowSize').value, 10);
   const cols = parseInt(document.getElementById('colSize').value, 10);
 
-  const hints = window.getHints(rows, cols);
+  const hints = window.AppHints.getHints(rows, cols);
   if (hints.errors) {
     // ヒント合計値などの矛盾は具体的にアラート＋フォーカス
-    window.showErrorPopup(hints.errors.join('\n'));
+    window.AppHints.showErrorPopup(hints.errors.join('\n'));
     if (hints.errorTargets && hints.errorTargets.length > 0) {
       const first = hints.errorTargets[0];
       setTimeout(() => {
@@ -29,15 +29,15 @@ export async function handleSolveButtonClick() {
   }
   const { rowHints, colHints } = hints;
   if (rowHints.length !== rows || colHints.length !== cols) {
-    window.showErrorPopup('ヒント入力数が正しくありません');
+    window.AppHints.showErrorPopup('ヒント入力数が正しくありません');
     return;
   }
 
   let solveGen;
   try {
-    solveGen = window.solvePicross(rowHints, colHints);
+    solveGen = window.AppHints.solvePicross(rowHints, colHints);
   } catch {
-    window.showErrorPopup("ソルバーの初期化に失敗しました");
+    window.AppHints.showErrorPopup("ソルバーの初期化に失敗しました");
     return;
   }
   window.currentSolveGen = solveGen;
@@ -92,7 +92,7 @@ export async function handleSolveButtonClick() {
       // 計算途中の矛盾はシンプルなアラートのみ
       if (data.hintErrors && data.hintErrors.length > 0) {
         // ヒント合計値などの矛盾は具体的にアラート＋フォーカス
-        window.showErrorPopup("ヒントに矛盾があります:\n" + data.hintErrors.join('\n'));
+        window.AppHints.showErrorPopup("ヒントに矛盾があります:\n" + data.hintErrors.join('\n'));
         if (data.hintErrorTargets && data.hintErrorTargets.length > 0) {
           const first = data.hintErrorTargets[0];
           setTimeout(() => {
@@ -108,7 +108,7 @@ export async function handleSolveButtonClick() {
           }, 50);
         }
       } else {
-        window.showErrorPopup("矛盾が発生しました。ヒントや入力内容を見直してください。");
+        window.AppHints.showErrorPopup("矛盾が発生しました。ヒントや入力内容を見直してください。");
       }
     } else {
       setTimeout(() => handleSolverStep(), 0);

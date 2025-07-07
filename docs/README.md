@@ -1,6 +1,6 @@
 # Picross Solver プロジェクト概要
 
-**Version:** `v1.0.0`
+**Version:** `v1.1.0` (2025-07-08) [変更履歴](CHANGELOG.md)
 
 ## プログラムの特徴
 本プロジェクトは、JavaScriptのみで構成されたピクロス（ノノグラム）自動解答Webアプリです。ブラウザ上で動作し、追加のサーバーや外部ライブラリは不要です。
@@ -42,15 +42,15 @@
 - 解答が見つからない場合やヒントに矛盾がある場合はエラー表示。
 
 ### 主なファイル構成
-- [`index.html`](index.html) : UIの骨組み。ヒント入力欄・グリッド・操作ボタン・プレビューなどを配置。
-- [`style.css`](src/common/style.css) : 全体のレイアウト・グリッド・ヒント入力欄などのスタイル。
-- [`main.js`](src/common/main.js) : UI制御・グリッド描画・タイマー・エラー表示などのロジック。
-- [`hint-input.css`](src/hint-input/style.css) : ヒント入力欄（エディタ風・テキストボックス型）の詳細スタイル。
-- [`hint-input.js`](src/hint-input/index.js) : スタイル切替・バリデーション等・ヒント検証などのロジック。
-- [`hint-input-editor.js`](src/hint-input/editor.js) : エディタ風ヒント入力欄生成などのロジック。
-- [`hint-input-textbox.js`](src/hint-input/textbox.js) : テキストボックス型ヒント入力欄生成などのロジック。
-- [`solver.js`](src/solver/solver.js) : ピクロス解答ロジック本体。ヒューマンスティックとバックトラック探索を組み合わせて解を導出。
-- [`solverHandler.js`](src/solver/solverHandler.js) : 「解く」ボタン押下時の処理、ソルバーの進行管理、途中経過・エラー表示など。
+- [`public/index.html`](../public/index.html) : UIの骨組み。ヒント入力欄・グリッド・操作ボタン・プレビューなどを配置。
+- [`src/common/style.css`](../src/common/style.css) : 全体のレイアウト・グリッド・ヒント入力欄などのスタイル。
+- [`src/common/main.js`](../src/common/main.js) : UI制御・グリッド描画・タイマー・エラー表示などのロジック。
+- [`src/common/style.css`](../src/hint-input/style.css) : ヒント入力欄（エディタ風・テキストボックス型）の詳細スタイル。
+- [`src/hint-input/index.js`](../src/hint-input/index.js) : スタイル切替・バリデーション等・ヒント検証などのロジック。
+- [`src/hint-input/editor.js`](../src/hint-input/editor.js) : エディタ風ヒント入力欄生成などのロジック。
+- [`src/hint-input/textbox.js`](../src/hint-input/textbox.js) : テキストボックス型ヒント入力欄生成などのロジック。
+- [`src/hint-input/solver.js`](../src/solver/solver.js) : ピクロス解答ロジック本体。ヒューマンスティックとバックトラック探索を組み合わせて解を導出。
+- [`src/hint-input/solverHandler.js`](../src/solver/solverHandler.js) : 「解く」ボタン押下時の処理、ソルバーの進行管理、途中経過・エラー表示など。
 
 ## 使い方（簡易手順）
 1. 行数・列数を指定し「グリッド生成」

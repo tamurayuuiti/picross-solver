@@ -165,10 +165,10 @@ function isValidSoFarLine(line, hints) {
 }
 
 // ピクロスを解くメインのジェネレーター関数
-function* solvePicross(rowHints, colHints) {
+export function* solvePicross(rowHints, colHints) {
   // ヒント矛盾検知はwindow.validateHintsを利用
-  const { errors: hintErrors, errorTargets: hintErrorTargets } = (typeof window !== "undefined" && window.validateHints)
-    ? window.validateHints(rowHints, colHints)
+  const { errors: hintErrors, errorTargets: hintErrorTargets } = (typeof window !== "undefined" && window.AppHints?.validateHints)
+    ? window.AppHints.validateHints(rowHints, colHints)
     : { errors: [], errorTargets: [] };
   if (hintErrors.length > 0) {
     // ヒントに矛盾があれば即エラーを返す
@@ -257,4 +257,7 @@ function* solvePicross(rowHints, colHints) {
 }
 
 // solvePicrossをグローバル公開
-window.solvePicross = solvePicross;
+if (typeof window !== "undefined") {
+  window.AppHints = window.AppHints || {};
+  window.AppHints.solvePicross = solvePicross;
+}
