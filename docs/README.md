@@ -42,7 +42,7 @@
 - 解答が見つからない場合やヒントに矛盾がある場合はエラー表示。
 
 ### 主なファイル構成
-- [`public/index.html`](../public/index.html) : UIの骨組み。ヒント入力欄・グリッド・操作ボタン・プレビューなどを配置。
+- [`index.html`](../index.html) : UIの骨組み。ヒント入力欄・グリッド・操作ボタン・プレビューなどを配置。
 - [`src/common/style.css`](../src/common/style.css) : 全体のレイアウト・グリッド・ヒント入力欄などのスタイル。
 - [`src/common/main.js`](../src/common/main.js) : UI制御・グリッド描画・タイマー・エラー表示などのロジック。
 - [`src/common/style.css`](../src/hint-input/style.css) : ヒント入力欄（エディタ風・テキストボックス型）の詳細スタイル。
