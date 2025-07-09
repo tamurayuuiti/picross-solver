@@ -19,6 +19,7 @@ import {
 // AppHints モジュール: グローバル window 汚染を避け、明示的に機能を公開
 // --------------------------------------------------------------------------
 window.AppHints = (() => {
+  const prev = window.AppHints || {};
   const state = {
     currentHintInputStyle: 'textbox',
   };
@@ -147,7 +148,7 @@ window.AppHints = (() => {
     if (style === 'textbox') {
       const { rowLines, colLines } = getTextboxHintValues(rows, cols);
       if (rowLines.length !== rows || colLines.length !== cols) {
-        showErrorPopup(`行ヒントは${rows}行、列ヒントは${cols}行で入力してください`);
+        window.AppHints.showErrorPopup(`行ヒントは${rows}行、列ヒントは${cols}行で入力してください`);
         return null;
       }
       rowHints = parseTextboxHints(rowLines);
@@ -156,7 +157,7 @@ window.AppHints = (() => {
       const rowLines = getEditorValues('rowHintTable');
       const colLines = getEditorValues('colHintTable');
       if (rowLines.length !== rows || colLines.length !== cols) {
-        showErrorPopup(`行ヒントは${rows}行、列ヒントは${cols}行で入力してください`);
+        window.AppHints.showErrorPopup(`行ヒントは${rows}行、列ヒントは${cols}行で入力してください`);
         return null;
       }
       rowHints = parseHintsEditor(rowLines);
@@ -165,7 +166,7 @@ window.AppHints = (() => {
 
     const { errors } = validateHints(rowHints, colHints);
     if (errors.length > 0) {
-      showErrorPopup(errors.join('\n'));
+      window.AppHints.showErrorPopup(errors.join('\n'));
       return null;
     }
 
@@ -232,6 +233,7 @@ window.AppHints = (() => {
   // 外部公開 API
   // --------------------------------------------------------------------------
   return {
+    ...prev,                        // 既存のAppHintsプロパティを維持
     validateHints,                  // ヒントのバリデーション関数
     parseHintsTextArea,             // ヒントテキストエリアのパース関数
     getHints,                       // ヒント取得関数
