@@ -1,4 +1,4 @@
-import { handleSolveButtonClick } from '../solver/solverHandler.js';
+import { handleSolveButtonClick } from './solver/solver-handler.js';
 
 // --------------------------------------------------------------------------
 // ピクロスグリッド生成・描画
