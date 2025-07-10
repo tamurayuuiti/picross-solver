@@ -50,7 +50,7 @@
 - [`src/hint-input/editor.js`](src/hint-input/editor.js) : エディタ風ヒント入力欄生成などのロジック。
 - [`src/hint-input/textbox.js`](src/hint-input/textbox.js) : テキストボックス型ヒント入力欄生成などのロジック。
 - [`src/solver/solver.js`](src/solver/solver.js) : ピクロス解答ロジック本体。ヒューマンスティックとバックトラック探索を組み合わせて解を導出。
-- [`src/solver/solverHandler.js`](src/solver/solver-handler.js) : 「解く」ボタン押下時の処理、ソルバーの進行管理、途中経過・エラー表示など。
+- [`src/solver/solver-handler.js`](src/solver/solver-handler.js) : 「解く」ボタン押下時の処理、ソルバーの進行管理、途中経過・エラー表示など。
 
 ## 使い方（簡易手順）
 1. 行数・列数を指定し「グリッド生成」
