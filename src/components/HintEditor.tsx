@@ -1,23 +1,28 @@
 // ============================================================================
 // HintEditor.tsx
-// 行ヒント/列ヒントの「テキスト入力」と「グリッド表示・編集」を
-// 1つにまとめたコンポーネント。
+// 行ヒント/列ヒントの「テキスト入力」のみを担うコンポーネント。
 //
-// 単一の状態管理方針:
+// 変更点（HintGrid廃止に伴う責務整理）:
+// - これまでテキスト入力欄の横に HintGrid（読み取り専用プレビュー）を
+//   表示していたが、「ヒントのグリッド表示・編集は盤面接続ヒント
+//   （PicrossBoard）のみが担う」という設計方針に従い、このプレビューを
+//   完全に削除した。
+// - HintGrid への依存（import）も完全に排除。HintEditor はテキスト入力
+//   とそのパース・シリアライズのみに専念する、純粋なテキスト編集UIとなった。
+//
+// 単一の状態管理方針（変更なし）:
 // - 真の状態（lines: HintLines）は親（App.tsx）が保持し、ここでは props
 //   としてのみ受け取る。テキスト入力欄の文字列は lines の「表示用バッファ」
 //   であり、別Stateとして扱わない。
-// - グリッド側の編集は HintGrid から直接 onChange(lines) で親に伝える。
-// - テキスト側の編集は parseHintText で lines に変換し、同様に親へ伝える。
-// - 親から渡された lines が「自分がテキストから生成したものと一致しない」
-//   場合（=盤面サイズ変更やグリッド編集など外部要因）にのみ、テキスト
-//   表示をその lines に再同期する。これにより自分の入力中の再フォーマット
-//   による入力体験の劣化を防ぐ。
+// - テキスト側の編集は parseHintText で lines に変換し、親へ伝える。
+// - 盤面側（PicrossBoard）でのグリッド編集により lines が変化した場合も、
+//   親から渡された lines が自分のテキスト由来の lines と一致しないときは
+//   テキスト表示をその lines に再同期する。これにより、テキスト⇔盤面の
+//   双方向同期が成立する（状態は App.tsx の単一ソースのまま）。
 // ============================================================================
 
 import { useEffect, useState } from 'react';
 import type { HintLines } from '../types';
-import { HintGrid } from './HintGrid';
 
 interface HintEditorProps {
   readonly title: string;
@@ -70,17 +75,12 @@ export function HintEditor({ title, lines, orientation, onChange }: HintEditorPr
   return (
     <div className="space-y-2">
       <h3 className="text-sm font-medium">{title}</h3>
-      <div className="flex gap-4">
-        <textarea
-          className="h-40 w-40 resize-none rounded border border-slate-300 p-2 font-mono text-sm"
-          value={text}
-          onChange={(e) => handleTextChange(e.target.value)}
-          placeholder={orientation === 'row' ? '例: 3 1\n2\n1 1 2' : '例: 1\n2 3\n1 1 2'}
-        />
-        <div className="overflow-auto">
-          <HintGrid lines={lines} orientation={orientation} editable onChange={onChange} />
-        </div>
-      </div>
+      <textarea
+        className="h-40 w-40 resize-none rounded border border-slate-300 p-2 font-mono text-sm"
+        value={text}
+        onChange={(e) => handleTextChange(e.target.value)}
+        placeholder={orientation === 'row' ? '例: 3 1\n2\n1 1 2' : '例: 1\n2 3\n1 1 2'}
+      />
     </div>
   );
 }

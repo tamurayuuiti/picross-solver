@@ -3,6 +3,10 @@
 // 既存の useSolver（→ solvePicross.ts）を駆動し、結果を PicrossBoard に
 // 渡して表示するパネル。新ヒントUIから得た rowHints/colHints をそのまま
 // solve() に渡すだけで接続する。solvePicross.ts / useSolver.ts は無改修。
+//
+// 変更点: PicrossBoard 側のヒント表示が編集可能になったため、編集結果を
+// onRowHintsChange / onColHintsChange としてそのまま親（App.tsx）に中継する。
+// SolverPanel 自身は状態を持たず、単純な橋渡しに留める。
 // ============================================================================
 
 import type { HintLines } from '../types';
@@ -12,6 +16,8 @@ import { PicrossBoard } from './PicrossBoard';
 interface SolverPanelProps {
   readonly rowHints: HintLines;
   readonly colHints: HintLines;
+  readonly onRowHintsChange: (lines: HintLines) => void;
+  readonly onColHintsChange: (lines: HintLines) => void;
 }
 
 function statusLabel(status: string): string {
@@ -33,7 +39,12 @@ function statusLabel(status: string): string {
   }
 }
 
-export function SolverPanel({ rowHints, colHints }: SolverPanelProps) {
+export function SolverPanel({
+  rowHints,
+  colHints,
+  onRowHintsChange,
+  onColHintsChange,
+}: SolverPanelProps) {
   const { status, grid, message, count, solve, reset } = useSolver();
 
   const handleSolve = () => {
@@ -61,7 +72,13 @@ export function SolverPanel({ rowHints, colHints }: SolverPanelProps) {
         </span>
       </div>
       {message && <p className="text-sm text-red-600">{message}</p>}
-      <PicrossBoard rowHints={rowHints} colHints={colHints} grid={grid} />
+      <PicrossBoard
+        rowHints={rowHints}
+        colHints={colHints}
+        grid={grid}
+        onRowHintsChange={onRowHintsChange}
+        onColHintsChange={onColHintsChange}
+      />
     </div>
   );
 }

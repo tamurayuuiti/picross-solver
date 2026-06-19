@@ -6,6 +6,9 @@
 // 単一の状態管理:
 // - rowHints / colHints (HintLines) を唯一の真の状態として保持する。
 // - サイズ変更時は resizeHintLines で既存ヒントを保持したまま配列を伸縮する。
+// - テキスト入力（HintEditor）と盤面接続ヒント表示（SolverPanel→PicrossBoard）
+//   は、ともに setRowHints / setColHints を呼ぶだけであり、別個のStateは
+//   一切持たない（禁止事項どおり）。
 // ============================================================================
 
 import { useState } from 'react';
@@ -89,7 +92,12 @@ export default function App() {
         </section>
 
         <section>
-          <SolverPanel rowHints={rowHints} colHints={colHints} />
+          <SolverPanel
+            rowHints={rowHints}
+            colHints={colHints}
+            onRowHintsChange={setRowHints}
+            onColHintsChange={setColHints}
+          />
         </section>
       </div>
     </div>
