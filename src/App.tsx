@@ -18,7 +18,7 @@ import { SolverPanel } from '@/components/SolverPanel';
 import { PRESETS } from '@/presets';
 
 const MIN_SIZE = 1;
-const MAX_SIZE = 30;
+const MAX_SIZE = 100;
 const DEFAULT_ROWS = 5;
 const DEFAULT_COLS = 5;
 
