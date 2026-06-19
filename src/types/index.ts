@@ -143,3 +143,36 @@ export interface SolveRunnerOptions {
 
 /** 駆動層が中断した理由（解発見/解なし/矛盾以外の理由で止まった場合） */
 export type SolveStopReason = 'trial-limit-exceeded' | 'cancelled';
+
+// ----------------------------------------------------------------------------
+// UI層 (useSolver) が公開する型
+// ソルバー本体 (solvePicross.ts) はこれらの型を一切知らない。
+// ----------------------------------------------------------------------------
+
+/** useSolver フックが管理する解探索の状態種別 */
+export type SolverStatus =
+  | 'idle'
+  | 'running'
+  | 'solved'
+  | 'unsolvable'
+  | 'contradiction'
+  | 'invalid-hints';
+
+/** useSolver フックの公開ステート */
+export interface UseSolverState {
+  readonly status: SolverStatus;
+  /** 表示用の盤面。idle時はnull */
+  readonly grid: Grid | SolvedGrid | null;
+  /** contradiction / invalid-hints 時のメッセージ */
+  readonly message?: string;
+  /** contradiction時、矛盾箇所（行/列）の位置情報 */
+  readonly target?: HintErrorTarget;
+  /** humanistic+backtrackを通算した試行回数 */
+  readonly count: number;
+}
+
+/** useSolver フックの戻り値（状態 + 操作） */
+export interface UseSolverResult extends UseSolverState {
+  readonly solve: (hints: PicrossHints) => void;
+  readonly reset: () => void;
+}
