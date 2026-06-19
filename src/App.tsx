@@ -12,9 +12,10 @@
 // ============================================================================
 
 import { useState } from 'react';
-import type { HintLines } from './types';
-import { HintEditor } from './components/HintEditor';
-import { SolverPanel } from './components/SolverPanel';
+import type { HintLines } from '@/types';
+import { HintEditor } from '@/components/HintEditor';
+import { SolverPanel } from '@/components/SolverPanel';
+import { PRESETS } from '@/presets';
 
 const MIN_SIZE = 1;
 const MAX_SIZE = 30;
@@ -56,10 +57,38 @@ export default function App() {
     setColHints((prev) => resizeHintLines(prev, next));
   };
 
+  const handleApplyPreset = (presetId: string) => {
+    const preset = PRESETS.find((p) => p.id === presetId);
+    if (!preset) return;
+
+    setRows(preset.rows);
+    setCols(preset.cols);
+    // プリセットの読み取り専用配列を直接セットすると、後でUIから編集した際に
+    // 参照エラーや意図せぬミューテーションが起きるため、コピーを生成する
+    setRowHints(preset.rowHints.map((line) => [...line]));
+    setColHints(preset.colHints.map((line) => [...line]));
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 p-6 text-slate-900">
       <div className="mx-auto max-w-4xl space-y-8">
         <h1 className="text-xl font-bold">Picross Solver</h1>
+
+        {/* 開発・テスト用プリセットUI */}
+        <section className="space-y-3 rounded border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 className="text-sm font-semibold text-slate-600">開発用プリセット</h2>
+          <div className="flex flex-wrap gap-2">
+            {PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                onClick={() => handleApplyPreset(preset.id)}
+                className="rounded bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-100 active:bg-indigo-200"
+              >
+                {preset.name}
+              </button>
+            ))}
+          </div>
+        </section>
 
         <section className="flex gap-6">
           <label className="flex items-center gap-2 text-sm">

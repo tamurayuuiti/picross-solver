@@ -22,7 +22,7 @@
 // ============================================================================
 
 import { useEffect, useState } from 'react';
-import type { HintLines } from '../types';
+import type { HintLines } from '@/types';
 
 interface HintEditorProps {
   readonly title: string;
