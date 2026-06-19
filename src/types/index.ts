@@ -176,3 +176,17 @@ export interface UseSolverResult extends UseSolverState {
   readonly solve: (hints: PicrossHints) => void;
   readonly reset: () => void;
 }
+
+// ----------------------------------------------------------------------------
+// UI層（新ヒント入力システム）が使う型
+// ソルバー本体 (solvePicross.ts) はこれらを一切知らない。
+// ----------------------------------------------------------------------------
+
+/** 行ヒント or 列ヒントの集合。各要素が1行/1列分のヒント配列。 */
+export type HintLines = number[][];
+
+/** 盤面サイズ */
+export interface BoardSize {
+  readonly rows: number;
+  readonly cols: number;
+}
