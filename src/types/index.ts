@@ -8,6 +8,9 @@
 //   旧実装では null と -1 が「未確定」として混在していたが、TS版では -1 のみを使う。
 // - ヒントの「矛盾検証」はソルバーの責務ではなく UI 層の責務とする。
 //   ソルバーは「検証済みのヒント」を受け取って解くことだけに専念する。
+// - 統計情報（試行回数・経過時間・仮定回数・最大深度）は SolverStats として
+//   一箇所に集約する。UI側の統計パネル/難易度推定/解答再生はこの構造体だけを
+//   見れば必要な情報が揃うことを意図している。
 // ============================================================================
 
 /** 1セルの状態。-1: 未確定, 0: 空白, 1: 塗り */
@@ -46,6 +49,42 @@ export interface HintErrorTarget {
 /** ソルバーが現在どのフェーズにいるか */
 export type SolvePhase = 'humanistic' | 'backtrack';
 
+/**
+ * 解がどの段階で確定したか。
+ * - 'humanistic': バックトラックの仮定を一切行わずに解けた（assumptionCount === 0）。
+ *   論理パズルとしては「単純」な部類であることが多く、難易度推定の主要な手掛かりになる。
+ * - 'backtrack': 1回以上の仮定（分岐の試行）を経て解けた。
+ */
+export type SolvedBy = 'humanistic' | 'backtrack';
+
+// ----------------------------------------------------------------------------
+// SolverStats: solvePicross が公開する統計情報の集約構造体。
+//
+// イベントの種類ごとに統計フィールドを個別に持たせるのではなく、
+// 「進行中/解決/矛盾/解なし」のいずれの SolverEvent も同じ形の stats を
+// 持つことで、UI側の統計パネル・実行時間表示・難易度推定・解答再生が
+// イベント種別を問わず同じ参照パス（event.stats.xxx）で実装できるようにする。
+//
+// すべて構造化複製可能なプレーン値（number のみ）で構成し、
+// Web Worker への postMessage 転送をそのまま許容する。
+// ----------------------------------------------------------------------------
+export interface SolverStats {
+  /** humanistic法+backtrack法を通算した、これまでの試行回数（従来のcountと同値） */
+  readonly count: number;
+  /**
+   * バックトラック探索で実際に分岐（仮定）を行った回数。
+   * 0 であれば、ヒューマンスティック法のみで解けた（または矛盾/解なしに達した）ことを意味する。
+   */
+  readonly assumptionCount: number;
+  /**
+   * バックトラック探索中に到達した最大の再帰深度（= 確定を試みた行のインデックスの最大値）。
+   * 探索がどれだけ深く潜る必要があったかの指標で、難易度推定や解答再生のステップ数見積もりに使う。
+   */
+  readonly maxDepth: number;
+  /** ソルバー開始（solvePicross呼び出し）からこのイベントが発生するまでの経過時間(ms)。 */
+  readonly elapsedMs: number;
+}
+
 // ----------------------------------------------------------------------------
 // SolverEvent: solvePicross が yield する値の判別ユニオン
 //
@@ -54,10 +93,16 @@ export type SolvePhase = 'humanistic' | 'backtrack';
 // ----------------------------------------------------------------------------
 
 interface SolverEventBase {
-  /** humanistic法+backtrack法を通算した、これまでの試行回数 */
+  /**
+   * humanistic法+backtrack法を通算した、これまでの試行回数。
+   * @deprecated 新規実装では `stats.count` を参照すること。
+   * 既存コードとの後方互換のために残しているフィールドで、常に stats.count と同値。
+   */
   readonly count: number;
   /** イベント発生時点でのフェーズ */
   readonly phase: SolvePhase;
+  /** このイベント時点での統計情報。UI統計パネル等はここを単一の参照先とする。 */
+  readonly stats: SolverStats;
 }
 
 /** 探索途中の盤面スナップショット（まだ解は確定していない） */
@@ -70,16 +115,25 @@ export interface SolverProgressEvent extends SolverEventBase {
 export interface SolverSolvedEvent extends SolverEventBase {
   readonly type: 'solved';
   readonly grid: SolvedGrid;
+  /**
+   * 解がどの段階で確定したか。
+   * stats.assumptionCount === 0 の場合は 'humanistic'、それ以外は 'backtrack'。
+   * 難易度表示（「論理だけで解けました」/「N回の仮定が必要でした」）に直接使える。
+   */
+  readonly solvedBy: SolvedBy;
 }
 
 /**
- * 論理的矛盾を検出した（ヒューマンスティック法 or バックトラック法の途中）。
+ * 論理的矛盾を検出した（ヒューマンスティック法の途中で検出される）。
  * 入力ヒント自体が不正な場合は SolverInvalidHintsEvent を使う。
+ *
+ * target は常に確定値として提供する（矛盾は必ず特定の行/列に帰属するため）。
+ * UI側はnullチェック不要でそのままハイライト対象として利用できる。
  */
 export interface SolverContradictionEvent extends SolverEventBase {
   readonly type: 'contradiction';
   readonly message: string;
-  readonly target?: HintErrorTarget;
+  readonly target: HintErrorTarget;
   /** 矛盾検出時点での盤面（デバッグ表示用、任意） */
   readonly grid?: Grid;
 }
@@ -167,8 +221,15 @@ export interface UseSolverState {
   readonly message?: string;
   /** contradiction時、矛盾箇所（行/列）の位置情報 */
   readonly target?: HintErrorTarget;
-  /** humanistic+backtrackを通算した試行回数 */
+  /**
+   * humanistic+backtrackを通算した試行回数。
+   * @deprecated 新規実装では `stats.count` を参照すること。
+   */
   readonly count: number;
+  /** 直近のSolverEventに付随する統計情報。idle時はundefined。 */
+  readonly stats?: SolverStats;
+  /** solved時、どの段階で解けたか。solved以外はundefined。 */
+  readonly solvedBy?: SolvedBy;
 }
 
 /** useSolver フックの戻り値（状態 + 操作） */

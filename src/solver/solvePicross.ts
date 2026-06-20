@@ -24,6 +24,7 @@ import type {
   LineHint,
   PicrossHints,
   SolverEvent,
+  SolverStats,
   SolvePicrossOptions,
   PicrossSolverGenerator,
 } from '@/types/index';
@@ -123,14 +124,24 @@ function getCertaintiesFromPoss(possList: readonly CellValue[][]): CellValue[] |
   });
 }
 
-interface HumanisticResult {
+interface HumanisticResultBase {
   readonly grid: Grid;
   readonly rowPoss: readonly CellValue[][][];
   readonly colPoss: readonly CellValue[][][];
   readonly count: number;
-  readonly error?: string;
-  readonly errorTarget?: { type: 'row' | 'col'; index: number };
 }
+
+interface HumanisticOkResult extends HumanisticResultBase {
+  readonly error?: undefined;
+  readonly errorTarget?: undefined;
+}
+
+interface HumanisticErrorResult extends HumanisticResultBase {
+  readonly error: string;
+  readonly errorTarget: { type: 'row' | 'col'; index: number };
+}
+
+type HumanisticResult = HumanisticOkResult | HumanisticErrorResult;
 
 // ----------------------------------------------------------------------------
 // ヒューマンスティック法（人間的な論理）で確定できるセルを埋める
@@ -241,6 +252,9 @@ function applyHumanistic(
 //
 // 呼び出し側がジェネレーターを自分のペースで .next() することで、
 // 同期的にも・タイマー/rAFで間引いても・Worker内で回しても利用できる。
+//
+// 各イベントは stats（SolverStats）を持つ。stats.count は従来の count と
+// 同値であり、トップレベルの count フィールドは後方互換のために残している。
 // ----------------------------------------------------------------------------
 export function* solvePicross(
   hints: PicrossHints,
@@ -252,6 +266,20 @@ export function* solvePicross(
   const height = rowHints.length;
   const width = colHints.length;
 
+  const startTime = performance.now();
+  const elapsedMs = (): number => performance.now() - startTime;
+
+  // 仮定（バックトラックでの分岐試行）回数と、到達した最大深度を通算で追跡する。
+  const assumptionCount = { value: 0 };
+  const maxDepth = { value: 0 };
+
+  const makeStats = (count: number): SolverStats => ({
+    count,
+    assumptionCount: assumptionCount.value,
+    maxDepth: maxDepth.value,
+    elapsedMs: elapsedMs(),
+  });
+
   // --- フェーズ1: ヒューマンスティック法で埋められるだけ埋める ---
   const humanisticResult = applyHumanistic(rowHints, colHints);
   if (humanisticResult.error) {
@@ -262,6 +290,7 @@ export function* solvePicross(
       grid: humanisticResult.grid,
       count: humanisticResult.count,
       phase: 'humanistic',
+      stats: makeStats(humanisticResult.count),
     };
     yield event;
     return;
@@ -275,9 +304,11 @@ export function* solvePicross(
     filterPossibilitiesByFixed(poss, grid[i])
   );
 
-  const trialCount = { value: 0 };
-
   function* backtrack(currentGrid: CellValue[][], rowIdx: number): Generator<SolverEvent, boolean, void> {
+    if (rowIdx > maxDepth.value) {
+      maxDepth.value = rowIdx;
+    }
+
     if (rowIdx === height) {
       for (let j = 0; j < width; j++) {
         const col = currentGrid.map((row) => row[j]);
@@ -286,11 +317,14 @@ export function* solvePicross(
         }
       }
       const solved: SolvedGrid = currentGrid.map((row) => row.map((c) => (c === -1 ? 0 : c) as 0 | 1));
+      const count = humanisticCount + assumptionCount.value;
       yield {
         type: 'solved',
         grid: solved,
-        count: humanisticCount + trialCount.value,
+        count,
         phase: 'backtrack',
+        stats: makeStats(count),
+        solvedBy: assumptionCount.value === 0 ? 'humanistic' : 'backtrack',
       };
       return true;
     }
@@ -309,17 +343,19 @@ export function* solvePicross(
       }
       if (!valid) continue;
 
-      trialCount.value++;
+      assumptionCount.value++;
 
       const result = yield* backtrack(newGrid, rowIdx + 1);
       if (result) return true;
 
-      if (progressInterval > 0 && trialCount.value % progressInterval === 0) {
+      if (progressInterval > 0 && assumptionCount.value % progressInterval === 0) {
+        const count = humanisticCount + assumptionCount.value;
         yield {
           type: 'progress',
           grid: newGrid,
-          count: humanisticCount + trialCount.value,
+          count,
           phase: 'backtrack',
+          stats: makeStats(count),
         };
       }
     }
@@ -337,10 +373,12 @@ export function* solvePicross(
   }
 
   if (!found) {
+    const count = humanisticCount + assumptionCount.value;
     yield {
       type: 'unsolvable',
-      count: humanisticCount + trialCount.value,
+      count,
       phase: 'backtrack',
+      stats: makeStats(count),
     };
   }
 }
