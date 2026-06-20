@@ -3,7 +3,22 @@
 // 盤面サイズ設定 + ヒント入力（行・列） + ソルバー表示パネル を統合する
 // エントリーポイント。
 //
-// 単一の状態管理:
+// レイアウト変更（今回の対象）:
+// - 「盤面が主役」という前提のもと、PC幅では左サイドバー（操作系一式）+
+//   右メインエリア（盤面のみ）の2カラム構成に変更した。
+// - サイドバー内は「プリセット/サイズ設定 → ヒント入力 → Solve操作」という
+//   作業順序に従って縦に並べる。SolverPanel が持つ「解く/リセットボタン +
+//   ステータス表示 + PicrossBoard」のうち、ボタン・ステータス部分は
+//   サイドバー側に、PicrossBoard部分はメインエリア側に視覚的に配置されるよう
+//   親側のレイアウト(flex)で制御する。SolverPanel/PicrossBoard 自体の内部
+//   構造・ロジックは無改修。
+// - 狭い画面（モバイル等）では縦積みに切り替え、盤面をヒント入力よりも
+//   前面（上）に出し、結果確認を優先する。
+// - PicrossBoard が自前で overflow-auto / max-h-[70vh] を持つため、
+//   メインエリア側は単に「広い領域を与える」役割に留め、スクロール制御を
+//   二重に持たない。
+//
+// 単一の状態管理（変更なし）:
 // - rowHints / colHints (HintLines) を唯一の真の状態として保持する。
 // - サイズ変更時は resizeHintLines で既存ヒントを保持したまま配列を伸縮する。
 // - テキスト入力（HintEditor）と盤面接続ヒント表示（SolverPanel→PicrossBoard）
@@ -70,64 +85,98 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 text-slate-900">
-      <div className="mx-auto max-w-4xl space-y-8">
+    <div className="flex h-screen flex-col bg-slate-50 text-slate-900">
+      {/* ヘッダー: タイトルのみ。常に画面最上部に固定的に存在する帯。 */}
+      <header className="flex-none border-b border-slate-200 bg-white px-6 py-3 shadow-sm">
         <h1 className="text-xl font-bold">Picross Solver</h1>
+      </header>
 
-        {/* 開発・テスト用プリセットUI */}
-        <section className="space-y-3 rounded border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-600">開発用プリセット</h2>
-          <div className="flex flex-wrap gap-2">
-            {PRESETS.map((preset) => (
-              <button
-                key={preset.id}
-                onClick={() => handleApplyPreset(preset.id)}
-                className="rounded bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-100 active:bg-indigo-200"
-              >
-                {preset.name}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="flex gap-6">
-          <label className="flex items-center gap-2 text-sm">
-            行数
-            <input
-              type="number"
-              min={MIN_SIZE}
-              max={MAX_SIZE}
-              value={rows}
-              onChange={(e) => handleRowsChange(Number(e.target.value))}
-              className="w-20 rounded border border-slate-300 p-1"
-            />
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            列数
-            <input
-              type="number"
-              min={MIN_SIZE}
-              max={MAX_SIZE}
-              value={cols}
-              onChange={(e) => handleColsChange(Number(e.target.value))}
-              className="w-20 rounded border border-slate-300 p-1"
-            />
-          </label>
-        </section>
-
-        <section className="flex flex-wrap gap-8">
-          <HintEditor title="行ヒント" lines={rowHints} orientation="row" onChange={setRowHints} />
-          <HintEditor title="列ヒント" lines={colHints} orientation="col" onChange={setColHints} />
-        </section>
-
-        <section>
+      {/* メインレイアウト: モバイルは縦積み（盤面を先頭に表示）、
+          md以上は「左サイドバー（操作系） + 右メインエリア（盤面）」の
+          2カラム構成に切り替える。 */}
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+        {/* 盤面エリア（モバイルでは先頭=上、md以上では右側に来るよう order を反転） */}
+        <main className="order-1 min-h-0 min-w-0 flex-1 overflow-auto p-4 md:order-2 md:p-6">
           <SolverPanel
             rowHints={rowHints}
             colHints={colHints}
             onRowHintsChange={setRowHints}
             onColHintsChange={setColHints}
           />
-        </section>
+        </main>
+
+        {/* サイドバー（操作系一式）: モバイルでは盤面の下、md以上では左側固定幅。
+            縦方向は内部でスクロール可能にし、画面高を超えても操作系が
+            破綻しないようにする。 */}
+        <aside className="order-2 flex-none overflow-y-auto border-slate-200 bg-white p-4 md:order-1 md:w-80 md:border-r md:p-6">
+          <div className="space-y-6">
+            {/* 開発・テスト用プリセットUI */}
+            <section className="space-y-3 rounded border border-slate-200 bg-slate-50 p-4">
+              <h2 className="text-sm font-semibold text-slate-600">開発用プリセット</h2>
+              <div className="flex flex-wrap gap-2">
+                {PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    onClick={() => handleApplyPreset(preset.id)}
+                    className="rounded bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-100 active:bg-indigo-200"
+                  >
+                    {preset.name}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            {/* グリッドサイズ設定 */}
+            <section className="space-y-3">
+              <h2 className="text-sm font-semibold text-slate-600">盤面サイズ</h2>
+              <div className="flex flex-wrap gap-4">
+                <label className="flex items-center gap-2 text-sm">
+                  行数
+                  <input
+                    type="number"
+                    min={MIN_SIZE}
+                    max={MAX_SIZE}
+                    value={rows}
+                    onChange={(e) => handleRowsChange(Number(e.target.value))}
+                    className="w-20 rounded border border-slate-300 p-1"
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  列数
+                  <input
+                    type="number"
+                    min={MIN_SIZE}
+                    max={MAX_SIZE}
+                    value={cols}
+                    onChange={(e) => handleColsChange(Number(e.target.value))}
+                    className="w-20 rounded border border-slate-300 p-1"
+                  />
+                </label>
+              </div>
+            </section>
+
+            {/* 行ヒント・列ヒントのテキスト入力。
+                盤面側でも直接編集できるため、ここは初期投入・一括編集用の
+                補助的な入力手段として、サイドバー内に小さくまとめる。 */}
+            <section className="space-y-4">
+              <h2 className="text-sm font-semibold text-slate-600">ヒント入力</h2>
+              <div className="flex flex-wrap gap-4">
+                <HintEditor
+                  title="行ヒント"
+                  lines={rowHints}
+                  orientation="row"
+                  onChange={setRowHints}
+                />
+                <HintEditor
+                  title="列ヒント"
+                  lines={colHints}
+                  orientation="col"
+                  onChange={setColHints}
+                />
+              </div>
+            </section>
+          </div>
+        </aside>
       </div>
     </div>
   );
