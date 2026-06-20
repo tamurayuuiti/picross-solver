@@ -7,9 +7,19 @@
 // 変更点: PicrossBoard 側のヒント表示が編集可能になったため、編集結果を
 // onRowHintsChange / onColHintsChange としてそのまま親（App.tsx）に中継する。
 // SolverPanel 自身は状態を持たず、単純な橋渡しに留める。
+//
+// 今回の変更点（全体プレビュー機能対応）:
+// - useSolver が保持する grid を、サイドバー側の BoardPreview にも表示
+//   できるようにするため、onGridChange コールバックを追加した。
+// - これは新しい state を追加するものではなく、SolverPanel が既に持っている
+//   grid の値を親（App.tsx）に「伝播」するだけの中継。useSolver/solvePicross
+//   側は完全に無改修。
+// - 呼び出しは useEffect で grid が変化した際にのみ行い、親側の不要な
+//   再レンダリングを避ける。
 // ============================================================================
 
-import type { HintLines } from '../types';
+import { useEffect } from 'react';
+import type { Grid, HintLines, SolvedGrid } from '../types';
 import { useSolver } from '@/hooks/useSolver';
 import { PicrossBoard } from './PicrossBoard';
 
@@ -18,6 +28,8 @@ interface SolverPanelProps {
   readonly colHints: HintLines;
   readonly onRowHintsChange: (lines: HintLines) => void;
   readonly onColHintsChange: (lines: HintLines) => void;
+  /** 現在のsolver盤面状態をサイドバーのプレビュー等へ伝播するための通知。任意。 */
+  readonly onGridChange?: (grid: Grid | SolvedGrid | null) => void;
 }
 
 function statusLabel(status: string): string {
@@ -44,8 +56,13 @@ export function SolverPanel({
   colHints,
   onRowHintsChange,
   onColHintsChange,
+  onGridChange,
 }: SolverPanelProps) {
   const { status, grid, message, count, solve, reset } = useSolver();
+
+  useEffect(() => {
+    onGridChange?.(grid);
+  }, [grid, onGridChange]);
 
   const handleSolve = () => {
     solve({ rowHints, colHints });
