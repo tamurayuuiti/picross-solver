@@ -199,6 +199,26 @@ export interface SolveRunnerOptions {
 export type SolveStopReason = 'trial-limit-exceeded' | 'cancelled';
 
 // ----------------------------------------------------------------------------
+// 解答再生（Replay）用の補助型
+// solvePicross.ts はこれらを一切知らない。useSolver が solvePicross の
+// イベント列を drain する際に、表示用のスナップショットとして
+// 副産物的に組み立てる UI 層専用の型。
+// ----------------------------------------------------------------------------
+
+/**
+ * 解答再生の1フレーム分のスナップショット。
+ * 元イベントの type / phase / stats をそのまま保持することで、
+ * 再生UI側は「このフレーム時点で何が起きていたか」を判別できる。
+ * phase は invalid-hints イベントのみ持たないため null を許容する。
+ */
+export interface ReplayFrame {
+  readonly grid: Grid | SolvedGrid;
+  readonly type: SolverEvent['type'];
+  readonly phase: SolvePhase | null;
+  readonly stats: SolverStats | null;
+}
+
+// ----------------------------------------------------------------------------
 // UI層 (useSolver) が公開する型
 // ソルバー本体 (solvePicross.ts) はこれらの型を一切知らない。
 // ----------------------------------------------------------------------------
@@ -230,6 +250,13 @@ export interface UseSolverState {
   readonly stats?: SolverStats;
   /** solved時、どの段階で解けたか。solved以外はundefined。 */
   readonly solvedBy?: SolvedBy;
+  /**
+   * 解答再生用のフレーム列。solve() 実行中に収集された各イベントの
+   * 盤面スナップショットを時系列に並べたもの。idle時は空配列。
+   * 大規模盤面でのメモリ消費を抑えるため、収集時にダウンサンプリング
+   * される場合がある（フレーム数の上限は useSolver 側の実装に委ねる）。
+   */
+  readonly frames: readonly ReplayFrame[];
 }
 
 /** useSolver フックの戻り値（状態 + 操作） */
