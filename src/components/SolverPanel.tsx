@@ -5,9 +5,10 @@
 // solve() に渡すだけで接続する。solvePicross.ts のジェネレーター駆動ロジック
 // は無改修（useSolverはstats/frames伝播のみ拡張）。
 //
-// 情報設計（ユーザーの動線に沿った配置）:
+// 情報設計（ユーザーの動線に沿った配置 - 今回の修正で最適化）:
 //   入力 → 実行（操作バー） → 結果確認（矛盾アラート / 盤面）
-//        → 統計確認（折りたたみ） → 解答再生（折りたたみ、solved/unsolvable時）
+//        → 解答再生（折りたたみ、solved/unsolvable時）★盤面の直下に引き上げ
+//        → 統計確認（折りたたみ） ★最下部へ配置換え
 //
 // 変更点（解答再生の完全実装）:
 // - useSolver が公開する frames（ReplayFrame[]）を使い、再生・一時停止・
@@ -192,15 +193,7 @@ function StatsPanel({ stats, solvedBy }: { readonly stats: SolverStats; readonly
 // 解答再生パネル（完全実装）
 // 「解答再生」フェーズ。盤面の探索過程（frames）を再生・一時停止・スライダー・
 // ステップ単位で確認できる。
-//
-// - 再生中/一時停止中を問わず、現在フレームの index を frameIndex として
-//   親（SolverPanel）に通知し、親側で PicrossBoard に渡す grid を
-//   差し替える（このコンポーネント自身はPicrossBoardを描画しない）。
-// - パネルを閉じている間は再生を強制停止し、frameIndex を末尾（最終結果）に
-//   戻すことで、閉じた瞬間に実際の解の盤面表示へ自然に戻る。
-// - 自動再生は setInterval を使う。間隔は固定値（PLAYBACK_INTERVAL_MS）。
 // ----------------------------------------------------------------------------
-
 const PLAYBACK_INTERVAL_MS = 120;
 
 function ReplayPanel({
@@ -226,7 +219,6 @@ function ReplayPanel({
     setOpen(next);
     onOpenChange(next);
     if (!next) {
-      // 閉じたら再生を止め、最終フレーム（実際の解）の表示に戻す。
       onPlayingChange(false);
       onFrameIndexChange(lastIndex);
     }
@@ -234,7 +226,6 @@ function ReplayPanel({
 
   const handlePlay = () => {
     if (lastIndex === 0) return;
-    // 末尾にいる状態で再生を押したら先頭から再生し直す。
     if (frameIndex >= lastIndex) {
       onFrameIndexChange(0);
     }
@@ -367,21 +358,16 @@ export function SolverPanel({
 }: SolverPanelProps) {
   const { status, grid, message, target, count, stats, solvedBy, frames, solve, reset } = useSolver();
 
-  // 解答再生の表示状態（ローカル）。useSolver / solvePicross.ts には影響しない。
   const [replayOpen, setReplayOpen] = useState(false);
   const [replayIndex, setReplayIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const intervalRef = useRef<number | null>(null);
 
-  // solve()が新しい結果を返したら、再生位置を末尾（=最終結果）にリセットし、
-  // 再生状態も初期化する。
   useEffect(() => {
     setReplayIndex(Math.max(0, frames.length - 1));
     setIsPlaying(false);
   }, [frames]);
 
-  // 自動再生のタイマー駆動。isPlaying中、PLAYBACK_INTERVAL_MSごとに1フレーム進める。
-  // 末尾に到達したら自動的に一時停止する。
   useEffect(() => {
     if (!isPlaying) {
       if (intervalRef.current !== null) {
@@ -410,9 +396,6 @@ export function SolverPanel({
     };
   }, [isPlaying, frames.length]);
 
-  // 再生パネルが開いていて、かつ有効なフレームがあるときだけ、
-  // 盤面表示を再生フレームの盤面に差し替える。
-  // パネルが閉じている間は常に実際のsolve結果（grid）を表示する。
   const displayGrid: Grid | SolvedGrid | null =
     replayOpen && frames.length > 0 ? frames[replayIndex]?.grid ?? grid : grid;
 
@@ -464,10 +447,8 @@ export function SolverPanel({
         onColHintsChange={onColHintsChange}
       />
 
-      {/* 統計確認: 折りたたみ（statsがあるときのみ表示） */}
-      {stats && <StatsPanel stats={stats} solvedBy={solvedBy} />}
-
-      {/* 解答再生: 折りたたみ（solved/unsolvable時のみ表示候補） */}
+      {/* 【修正点】解答再生: 折りたたみ（solved/unsolvable時のみ表示候補）
+          盤面の直下（統計情報の上）に移動し、視線移動とスクロールの負担を解消 */}
       {canReplay && (
         <ReplayPanel
           frames={frames}
@@ -478,6 +459,10 @@ export function SolverPanel({
           onOpenChange={setReplayOpen}
         />
       )}
+
+      {/* 【修正点】統計確認: 折りたたみ（statsがあるときのみ表示）
+          読物UIとして最下部に配置換え */}
+      {stats && <StatsPanel stats={stats} solvedBy={solvedBy} />}
     </div>
   );
 }
