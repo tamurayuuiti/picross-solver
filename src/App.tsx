@@ -25,12 +25,13 @@
 // - rowHints / colHints (HintLines) を唯一の真の状態として保持する。
 // ============================================================================
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Grid, HintLines, SolvedGrid } from '@/types';
 import { HintEditor } from '@/components/HintEditor';
 import { SolverPanel } from '@/components/SolverPanel';
 import { BoardPreview } from '@/components/BoardPreview';
 import { PRESETS } from '@/presets';
+import { validateHints } from '@/validation/hintValidation';
 
 const MIN_SIZE = 1;
 const MAX_SIZE = 100;
@@ -61,6 +62,17 @@ export default function App() {
   const [colHints, setColHints] = useState<HintLines>(() => createEmptyHintLines(DEFAULT_COLS));
   // SolverPanel内部(useSolver)が保持するgridの「表示用ミラー」。
   const [currentGrid, setCurrentGrid] = useState<Grid | SolvedGrid | null>(null);
+
+  // ----------------------------------------------------------------------------
+  // ヒント入力の静的検証（solvePicrossを呼ぶ前に判定できるエラー）。
+  // rowHints/colHints/rows/cols が変わる都度再計算される単一のソースであり、
+  // HintEditor（セルエラー）/ PicrossBoard（セル・行/列エラーの強調表示）/
+  // SolverPanel（行/列エラーの集約表示・solveブロック判定）へそのまま配る。
+  // ----------------------------------------------------------------------------
+  const validation = useMemo(
+    () => validateHints(rowHints, colHints, rows, cols),
+    [rowHints, colHints, rows, cols]
+  );
 
   const handleRowsChange = (value: number) => {
     const next = clampSize(value);
@@ -140,6 +152,19 @@ export default function App() {
                   />
                 </label>
               </div>
+              {/* 全体エラー: 行数/列数の不一致。特定の行・列に帰属しないため
+                  「盤面サイズ」セクション直下に表示する（局所ハイライトでは
+                  伝わらない種類のエラーのため）。 */}
+              {validation.globalErrors.length > 0 && (
+                <ul className="space-y-1 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  {validation.globalErrors.map((err) => (
+                    <li key={err.kind} className="flex items-start gap-1.5">
+                      <span className="mt-0.5 flex-none">⚠</span>
+                      <span>{err.message}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
 
             {/* 3. ヒント入力 */}
@@ -151,12 +176,16 @@ export default function App() {
                   lines={rowHints}
                   orientation="row"
                   onChange={setRowHints}
+                  cellErrors={validation.rowCellErrors}
+                  lineErrors={validation.lineErrors}
                 />
                 <HintEditor
                   title="列ヒント"
                   lines={colHints}
                   orientation="col"
                   onChange={setColHints}
+                  cellErrors={validation.colCellErrors}
+                  lineErrors={validation.lineErrors}
                 />
               </div>
             </section>
@@ -178,6 +207,7 @@ export default function App() {
             onRowHintsChange={setRowHints}
             onColHintsChange={setColHints}
             onGridChange={setCurrentGrid}
+            validation={validation}
           />
         </main>
       </div>

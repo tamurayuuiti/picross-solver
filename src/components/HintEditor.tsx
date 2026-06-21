@@ -22,13 +22,18 @@
 // ============================================================================
 
 import { useEffect, useState } from 'react';
-import type { HintLines } from '@/types';
+import type { HintCellError, HintLineError, HintLines } from '@/types';
+import { findLineError, validateRawHintText } from '@/validation/hintValidation';
 
 interface HintEditorProps {
   readonly title: string;
   readonly lines: HintLines;
   readonly orientation: 'row' | 'col';
   readonly onChange: (lines: HintLines) => void;
+  /** このヒント（行ヒント or 列ヒント）に属するセル単位エラー。App.tsxのvalidateHintsから配布される。 */
+  readonly cellErrors?: readonly HintCellError[];
+  /** 行/列単位エラー（総和オーバー等）。row/col両方を含むため、自分のorientationに合致するものだけを使う。 */
+  readonly lineErrors?: readonly HintLineError[];
 }
 
 function parseHintText(text: string): HintLines {
@@ -55,7 +60,32 @@ function linesEqual(a: HintLines, b: HintLines): boolean {
   });
 }
 
-export function HintEditor({ title, lines, orientation, onChange }: HintEditorProps) {
+function cellErrorLabel(kind: HintCellError['kind']): string {
+  switch (kind) {
+    case 'not-a-number':
+      return '数字以外の文字';
+    case 'not-integer':
+      return '小数は使えません';
+    case 'non-positive':
+      return '0以下の値は使えません';
+    default:
+      return '不正な値';
+  }
+}
+
+/** orientationに対応するラインラベル（"行"/"列"）+ 1-based の番号。 */
+function lineLabel(orientation: 'row' | 'col', lineIndex: number): string {
+  return orientation === 'row' ? `行${lineIndex + 1}` : `列${lineIndex + 1}`;
+}
+
+export function HintEditor({
+  title,
+  lines,
+  orientation,
+  onChange,
+  cellErrors = [],
+  lineErrors = [],
+}: HintEditorProps) {
   const [text, setText] = useState(() => serializeHintLines(lines));
 
   useEffect(() => {
@@ -72,15 +102,67 @@ export function HintEditor({ title, lines, orientation, onChange }: HintEditorPr
     onChange(parseHintText(value));
   };
 
+  // ----------------------------------------------------------------------------
+  // エラー集約: 「数字以外・小数・負数」（生テキストの再検証、parseHintTextが
+  // 黙って捨てたトークンを検出するため text を直接走査）と、
+  // 「ヒント総和オーバー」（props経由、行/列単位）の2系統をまとめ、
+  // 行番号ごとに表示する。1つのtextareaで複数行を編集する構造上、
+  // セル単位のピンポイント強調はできないため、「どの行に何の問題があるか」
+  // を一覧として示す方式を取る（過剰な赤塗りを避けつつ、原因の特定を助ける）。
+  // ----------------------------------------------------------------------------
+  const rawTextErrors = validateRawHintText(text);
+  const allCellErrors = [...cellErrors, ...rawTextErrors];
+
+  const errorLineIndexes = new Set<number>();
+  allCellErrors.forEach((e) => errorLineIndexes.add(e.lineIndex));
+  lineErrors
+    .filter((e) => e.type === orientation)
+    .forEach((e) => errorLineIndexes.add(e.index));
+
+  const hasError = errorLineIndexes.size > 0;
+
   return (
     <div className="space-y-2">
-      <h3 className="text-sm font-medium">{title}</h3>
+      <div className="flex items-center gap-2">
+        <h3 className="text-sm font-medium">{title}</h3>
+        {hasError && (
+          <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">
+            {errorLineIndexes.size}件のエラー
+          </span>
+        )}
+      </div>
       <textarea
-        className="h-40 w-40 resize-none rounded border border-slate-300 p-2 font-mono text-sm"
+        className={`h-40 w-40 resize-none rounded border p-2 font-mono text-sm outline-none ${
+          hasError
+            ? 'border-red-400 bg-red-50 focus:border-red-500'
+            : 'border-slate-300 focus:border-slate-600'
+        }`}
         value={text}
         onChange={(e) => handleTextChange(e.target.value)}
         placeholder={orientation === 'row' ? '例: 3 1\n2\n1 1 2' : '例: 1\n2 3\n1 1 2'}
       />
+      {hasError && (
+        <ul className="space-y-1 text-xs text-red-700">
+          {Array.from(errorLineIndexes)
+            .sort((a, b) => a - b)
+            .map((lineIndex) => {
+              const cellMessages = allCellErrors
+                .filter((e) => e.lineIndex === lineIndex)
+                .map((e) => cellErrorLabel(e.kind));
+              const lineErr = findLineError(lineErrors, orientation, lineIndex);
+              const messages = [...new Set(cellMessages)];
+              if (lineErr) messages.push(lineErr.message.replace(/^[^:]+:\s*/, ''));
+              return (
+                <li key={lineIndex} className="flex items-start gap-1.5">
+                  <span className="flex-none font-medium text-red-600">
+                    {lineLabel(orientation, lineIndex)}:
+                  </span>
+                  <span>{messages.join(' / ')}</span>
+                </li>
+              );
+            })}
+        </ul>
+      )}
     </div>
   );
 }

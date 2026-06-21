@@ -40,7 +40,8 @@
 // ============================================================================
 
 import type { CSSProperties } from 'react';
-import type { CellValue, Grid, HintLines, SolvedGrid } from '../types';
+import type { CellValue, Grid, HintCellError, HintLineError, HintLines, SolvedGrid } from '../types';
+import { findCellError, findLineError } from '../validation/hintValidation';
 
 // ----------------------------------------------------------------------------
 // グリッド寸法・罫線太さ・罫線色の基準値
@@ -71,6 +72,11 @@ const BOARD_MINOR_BORDER_COLOR = '#94a3b8'; // slate-400相当
 const BOARD_OUTER_BORDER_COLOR = '#475569'; // slate-600相当
 /** ヒントグリッドの罫線色（主軸・直交軸とも共通、交点ブロックも同色） */
 const HINT_BORDER_COLOR = '#cbd5e1'; // slate-300相当
+
+/** エラーがあるヒントセルの枠線色（彩度を抑えた赤、過剰に目立たせないため枠線のみで表現） */
+const HINT_ERROR_BORDER_COLOR = '#ef4444'; // red-500相当
+/** エラーがあるヒントセルの背景色（薄い赤、文字は読める程度の薄さに留める） */
+const HINT_ERROR_BG_CLASS = 'bg-red-50';
 
 /**
  * 「このインデックスのセルの右側 / 下側」に太線を引くべきか。
@@ -112,6 +118,26 @@ interface PicrossBoardProps {
   readonly onRowHintsChange: (lines: HintLines) => void;
   /** 列ヒントを盤面側で直接編集した結果を親に伝える */
   readonly onColHintsChange: (lines: HintLines) => void;
+  /** 行ヒントのセル単位エラー（App.tsxのvalidateHintsから配布）。盤面接続ヒントの該当セルを強調表示する。 */
+  readonly rowCellErrors?: readonly HintCellError[];
+  /** 列ヒントのセル単位エラー。 */
+  readonly colCellErrors?: readonly HintCellError[];
+  /** 行/列単位エラー（総和オーバー等）。row/col両方を含む。 */
+  readonly lineErrors?: readonly HintLineError[];
+}
+
+/** セルエラーのtitle属性用テキスト（ホバー時のツールチップで原因を伝える）。 */
+function cellErrorTitle(error: HintCellError): string {
+  switch (error.kind) {
+    case 'not-a-number':
+      return `不正な値: "${error.rawToken}"（数字以外の文字）`;
+    case 'not-integer':
+      return `不正な値: "${error.rawToken}"（小数は使用できません）`;
+    case 'non-positive':
+      return `不正な値: "${error.rawToken}"（0以下の値は使用できません）`;
+    default:
+      return '不正な値';
+  }
 }
 
 function handleEdit(
@@ -146,11 +172,15 @@ function ColHints({
   maxLen,
   cols,
   onChange,
+  cellErrors = [],
+  lineErrors = [],
 }: {
   colHints: HintLines;
   maxLen: number;
   cols: number;
   onChange: (lines: HintLines) => void;
+  cellErrors?: readonly HintCellError[];
+  lineErrors?: readonly HintLineError[];
 }) {
   return (
     <div className="sticky top-0 z-20 flex bg-slate-50">
@@ -160,6 +190,9 @@ function ColHints({
         const isLast = lineIndex === cols - 1;
         const rightWidth = isLast ? HINT_OUTER_BORDER_PX : borderWeightPx(lineIndex, cols);
         const leftWidth = isFirst ? HINT_OUTER_BORDER_PX : 0;
+        // この列ヒント全体が「総和オーバー」等のライン単位エラーを持つか。
+        // 持つ場合は列全体（パディング部含む）を薄く強調する。
+        const hasLineError = findLineError(lineErrors, 'col', lineIndex) !== undefined;
         const baseStyle: CSSProperties = {
           width: CELL_PX,
           height: CELL_PX,
@@ -168,26 +201,40 @@ function ColHints({
           borderRightWidth: rightWidth,
           borderLeftWidth: leftWidth,
           borderBottomWidth: MINOR_BORDER_PX,
-          borderColor: HINT_BORDER_COLOR,
+          borderColor: hasLineError ? HINT_ERROR_BORDER_COLOR : HINT_BORDER_COLOR,
         };
         return (
           <div key={lineIndex} className="flex flex-col" style={{ width: CELL_PX }}>
             {Array.from({ length: padCount }, (_, i) => (
-              <div key={`pad-${i}`} style={baseStyle} />
-            ))}
-            {line.map((value, posInLine) => (
-              <input
-                key={posInLine}
-                type="text"
-                inputMode="numeric"
-                value={value}
-                onChange={(e) =>
-                  handleEdit(colHints, lineIndex, posInLine, e.target.value, onChange)
-                }
+              <div
+                key={`pad-${i}`}
                 style={baseStyle}
-                className="bg-white text-center font-mono text-xs outline-none focus:border-slate-600 sm:text-sm"
+                className={hasLineError ? HINT_ERROR_BG_CLASS : undefined}
               />
             ))}
+            {line.map((value, posInLine) => {
+              const cellError = findCellError(cellErrors, lineIndex, posInLine);
+              const isCellError = cellError !== undefined;
+              const cellStyle: CSSProperties = isCellError
+                ? { ...baseStyle, borderColor: HINT_ERROR_BORDER_COLOR }
+                : baseStyle;
+              return (
+                <input
+                  key={posInLine}
+                  type="text"
+                  inputMode="numeric"
+                  value={value}
+                  onChange={(e) =>
+                    handleEdit(colHints, lineIndex, posInLine, e.target.value, onChange)
+                  }
+                  style={cellStyle}
+                  title={cellError ? cellErrorTitle(cellError) : undefined}
+                  className={`text-center font-mono text-xs outline-none focus:border-slate-600 sm:text-sm ${
+                    isCellError || hasLineError ? HINT_ERROR_BG_CLASS : 'bg-white'
+                  }`}
+                />
+              );
+            })}
           </div>
         );
       })}
@@ -212,11 +259,15 @@ function RowHints({
   maxLen,
   rows,
   onChange,
+  cellErrors = [],
+  lineErrors = [],
 }: {
   rowHints: HintLines;
   maxLen: number;
   rows: number;
   onChange: (lines: HintLines) => void;
+  cellErrors?: readonly HintCellError[];
+  lineErrors?: readonly HintLineError[];
 }) {
   return (
     <div className="sticky left-0 z-10 flex flex-col bg-slate-50">
@@ -226,6 +277,7 @@ function RowHints({
         const isLast = lineIndex === rows - 1;
         const bottomWidth = isLast ? HINT_OUTER_BORDER_PX : borderWeightPx(lineIndex, rows);
         const topWidth = isFirst ? HINT_OUTER_BORDER_PX : 0;
+        const hasLineError = findLineError(lineErrors, 'row', lineIndex) !== undefined;
         const baseStyle: CSSProperties = {
           width: CELL_PX,
           height: CELL_PX,
@@ -234,26 +286,40 @@ function RowHints({
           borderBottomWidth: bottomWidth,
           borderTopWidth: topWidth,
           borderRightWidth: MINOR_BORDER_PX,
-          borderColor: HINT_BORDER_COLOR,
+          borderColor: hasLineError ? HINT_ERROR_BORDER_COLOR : HINT_BORDER_COLOR,
         };
         return (
           <div key={lineIndex} className="flex" style={{ height: CELL_PX }}>
             {Array.from({ length: padCount }, (_, i) => (
-              <div key={`pad-${i}`} style={baseStyle} />
-            ))}
-            {line.map((value, posInLine) => (
-              <input
-                key={posInLine}
-                type="text"
-                inputMode="numeric"
-                value={value}
-                onChange={(e) =>
-                  handleEdit(rowHints, lineIndex, posInLine, e.target.value, onChange)
-                }
+              <div
+                key={`pad-${i}`}
                 style={baseStyle}
-                className="bg-white text-center font-mono text-xs outline-none focus:border-slate-600 sm:text-sm"
+                className={hasLineError ? HINT_ERROR_BG_CLASS : undefined}
               />
             ))}
+            {line.map((value, posInLine) => {
+              const cellError = findCellError(cellErrors, lineIndex, posInLine);
+              const isCellError = cellError !== undefined;
+              const cellStyle: CSSProperties = isCellError
+                ? { ...baseStyle, borderColor: HINT_ERROR_BORDER_COLOR }
+                : baseStyle;
+              return (
+                <input
+                  key={posInLine}
+                  type="text"
+                  inputMode="numeric"
+                  value={value}
+                  onChange={(e) =>
+                    handleEdit(rowHints, lineIndex, posInLine, e.target.value, onChange)
+                  }
+                  style={cellStyle}
+                  title={cellError ? cellErrorTitle(cellError) : undefined}
+                  className={`text-center font-mono text-xs outline-none focus:border-slate-600 sm:text-sm ${
+                    isCellError || hasLineError ? HINT_ERROR_BG_CLASS : 'bg-white'
+                  }`}
+                />
+              );
+            })}
           </div>
         );
       })}
@@ -306,6 +372,9 @@ export function PicrossBoard({
   grid,
   onRowHintsChange,
   onColHintsChange,
+  rowCellErrors,
+  colCellErrors,
+  lineErrors,
 }: PicrossBoardProps) {
   const rows = rowHints.length;
   const cols = colHints.length;
@@ -325,8 +394,22 @@ export function PicrossBoard({
         {/* 左上交点: 行ヒント上辺・列ヒント左辺が連続するよう、1セルごとの
             グリッドとして描画する（罫線なしの空白divではない）。 */}
         <CornerGrid rowMaxLen={rowMaxLen} colMaxLen={colMaxLen} />
-        <ColHints colHints={colHints} maxLen={colMaxLen} cols={cols} onChange={onColHintsChange} />
-        <RowHints rowHints={rowHints} maxLen={rowMaxLen} rows={rows} onChange={onRowHintsChange} />
+        <ColHints
+          colHints={colHints}
+          maxLen={colMaxLen}
+          cols={cols}
+          onChange={onColHintsChange}
+          cellErrors={colCellErrors}
+          lineErrors={lineErrors}
+        />
+        <RowHints
+          rowHints={rowHints}
+          maxLen={rowMaxLen}
+          rows={rows}
+          onChange={onRowHintsChange}
+          cellErrors={rowCellErrors}
+          lineErrors={lineErrors}
+        />
         {/* 盤面本体: 固定DOM。罫線太さはborderWeightPxで行・列ヒントと同一判定。
             外枠に接する辺だけ borderColor を個別指定し、それ以外の辺は
             通常色のままにする（className一括指定はしない）。 */}

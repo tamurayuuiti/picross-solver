@@ -278,3 +278,69 @@ export interface BoardSize {
   readonly rows: number;
   readonly cols: number;
 }
+
+// ----------------------------------------------------------------------------
+// ヒント入力の静的検証（UI層専用）
+//
+// solvePicross を実行する前に判定できるエラーをここに集約する。
+// solvePicross.ts 自体はこれらの型を一切知らない（無改修方針）。
+//
+// 設計方針:
+// - 「セル単位のエラー」（不正トークン・0・負数・小数）と
+//   「行/列単位のエラー」（総和オーバー・候補生成不能）と
+//   「盤面全体のエラー」（行数/列数不一致）を分けて表現する。
+//   表示側（HintEditor / PicrossBoard / SolverPanel）がそれぞれ
+//   異なる粒度でハイライトするため。
+// ----------------------------------------------------------------------------
+
+/** セル単位の入力形式エラー種別 */
+export type HintCellErrorKind =
+  | 'not-a-number' // 数字として解釈できない（不正文字・空欄を除くトークン）
+  | 'not-integer' // 小数
+  | 'non-positive'; // 0 または負数
+
+/** 1つのヒント値（セル）に紐づくエラー */
+export interface HintCellError {
+  readonly lineIndex: number;
+  readonly posInLine: number;
+  readonly kind: HintCellErrorKind;
+  /** 元の入力トークン（表示・デバッグ用） */
+  readonly rawToken: string;
+}
+
+/** 1行/1列単位のエラー種別（セル単体の問題ではなく、ライン全体として成立しないもの） */
+export type HintLineErrorKind =
+  | 'sum-overflow' // ヒント総和 + 区切り数 が軸の長さを超える
+  | 'no-candidates'; // 制約を満たす配置が1件も存在しない
+
+/** 1行/1列に紐づくエラー（セルエラーとは独立） */
+export interface HintLineError {
+  readonly type: 'row' | 'col';
+  readonly index: number;
+  readonly kind: HintLineErrorKind;
+  readonly message: string;
+}
+
+/** 盤面全体に関わるエラー種別（特定の行/列に帰属しない） */
+export type GlobalHintErrorKind =
+  | 'row-count-mismatch' // rowHints.length !== rows
+  | 'col-count-mismatch'; // colHints.length !== cols
+
+/** 盤面全体に紐づくエラー */
+export interface GlobalHintError {
+  readonly kind: GlobalHintErrorKind;
+  readonly message: string;
+}
+
+/**
+ * ヒント入力全体の検証結果。
+ * App.tsx が rowHints/colHints/rows/cols から都度計算し、
+ * 各表示コンポーネントへ配布する「エラーの単一ソース」。
+ */
+export interface HintValidationResult {
+  readonly cellErrors: readonly HintCellError[];
+  readonly lineErrors: readonly HintLineError[];
+  readonly globalErrors: readonly GlobalHintError[];
+  /** いずれかのエラーが1件でも存在するか（solve実行の可否判定に使う） */
+  readonly hasError: boolean;
+}

@@ -25,8 +25,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type {
   Grid,
+  HintCellError,
   HintErrorTarget,
   HintLines,
+  HintValidationResult,
   ReplayFrame,
   SolvedBy,
   SolvedGrid,
@@ -35,6 +37,12 @@ import type {
 import { useSolver } from '@/hooks/useSolver';
 import { PicrossBoard } from './PicrossBoard';
 
+/** App.tsx の validateHints が返す拡張結果（rowCellErrors/colCellErrorsを含む）。 */
+interface HintValidationWithCellSplit extends HintValidationResult {
+  readonly rowCellErrors: readonly HintCellError[];
+  readonly colCellErrors: readonly HintCellError[];
+}
+
 interface SolverPanelProps {
   readonly rowHints: HintLines;
   readonly colHints: HintLines;
@@ -42,6 +50,8 @@ interface SolverPanelProps {
   readonly onColHintsChange: (lines: HintLines) => void;
   /** 現在のsolver盤面状態をサイドバーのプレビュー等へ伝播するための通知。任意。 */
   readonly onGridChange?: (grid: Grid | SolvedGrid | null) => void;
+  /** App.tsx で計算された静的検証結果。solve実行のブロック判定・エラー表示に使う。 */
+  readonly validation: HintValidationWithCellSplit;
 }
 
 function statusLabel(status: string): string {
@@ -97,6 +107,45 @@ function frameTypeLabel(type: ReplayFrame['type']): string {
   }
 }
 
+// ----------------------------------------------------------------------------
+// 静的エラー集約バナー
+// 「実行」フェーズの直前に表示する全体エラー。solvePicrossを呼ぶ前に
+// 判明している問題（サイズ不整合・ヒント総和オーバー・入力形式エラー）を
+// まとめて伝え、「なぜ解けないか」を実行前から把握できるようにする。
+// 個別の詳細は HintEditor / PicrossBoard 側の局所表示に譲り、ここでは
+// 「件数 + 種別ごとの要約」のみを示す（情報量を絞り、過剰な赤化を避ける）。
+// ----------------------------------------------------------------------------
+function StaticErrorBanner({ validation }: { readonly validation: HintValidationWithCellSplit }) {
+  const cellErrorCount = validation.rowCellErrors.length + validation.colCellErrors.length;
+  const lineErrorCount = validation.lineErrors.length;
+  const globalErrorCount = validation.globalErrors.length;
+
+  const summaries: string[] = [];
+  if (globalErrorCount > 0) summaries.push(`盤面サイズの不一致（${globalErrorCount}件）`);
+  if (lineErrorCount > 0) summaries.push(`ヒントの合計が盤面サイズを超えている行/列（${lineErrorCount}件）`);
+  if (cellErrorCount > 0) summaries.push(`入力値の形式エラー（${cellErrorCount}件）`);
+
+  if (summaries.length === 0) return null;
+
+  return (
+    <div className="flex items-start gap-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+      <span className="mt-0.5 flex-none rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+        !
+      </span>
+      <div className="space-y-0.5">
+        <p className="font-medium">入力内容に問題があるため、解析を実行できません</p>
+        <ul className="list-inside list-disc text-xs text-amber-700">
+          {summaries.map((s) => (
+            <li key={s}>{s}</li>
+          ))}
+        </ul>
+        <p className="text-xs text-amber-600">
+          左側のヒント入力欄、または盤面に隣接するヒントセルの赤枠箇所を確認してください。
+        </p>
+      </div>
+    </div>
+  );
+}
 // ----------------------------------------------------------------------------
 // 矛盾アラート
 // 「結果確認」フェーズの一部として、操作バー直下に常時表示（発生時のみ）。
@@ -355,6 +404,7 @@ export function SolverPanel({
   onRowHintsChange,
   onColHintsChange,
   onGridChange,
+  validation,
 }: SolverPanelProps) {
   const { status, grid, message, target, count, stats, solvedBy, frames, solve, reset } = useSolver();
 
@@ -403,7 +453,14 @@ export function SolverPanel({
     onGridChange?.(displayGrid);
   }, [displayGrid, onGridChange]);
 
+  // 静的検証でエラーが見つかっている間は、solvePicrossを実行しても
+  // 矛盾/解なしとして空虚な結果しか返らない（あるいは無意味な探索コストが
+  // かかる）ため、「解く」ボタン自体を無効化する。これにより、ユーザーは
+  // 「実行→失敗」の往復をせず、入力修正に直接向かえる。
+  const canSolve = !validation.hasError;
+
   const handleSolve = () => {
+    if (!canSolve) return;
     solve({ rowHints, colHints });
   };
 
@@ -411,11 +468,16 @@ export function SolverPanel({
 
   return (
     <div className="space-y-4">
+      {/* 実行直前: 静的エラー集約バナー（solvePicrossを呼ぶ前に判明している問題） */}
+      <StaticErrorBanner validation={validation} />
+
       {/* 実行: 操作バー + ステータス表示 */}
       <div className="flex flex-wrap items-center gap-2">
         <button
-          className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+          className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           onClick={handleSolve}
+          disabled={!canSolve}
+          title={canSolve ? undefined : '入力エラーを修正してから実行してください'}
         >
           解く
         </button>
@@ -437,6 +499,11 @@ export function SolverPanel({
         <ContradictionAlert message={message} target={target} />
       )}
       {status === 'invalid-hints' && message && <ContradictionAlert message={message} />}
+      {status === 'unsolvable' && (
+        <ContradictionAlert
+          message="入力されたヒントの組み合わせでは、条件を満たす盤面が存在しません（全探索済み）"
+        />
+      )}
 
       {/* 結果確認: 盤面（再生中は再生フレームの盤面を表示） */}
       <PicrossBoard
@@ -445,6 +512,9 @@ export function SolverPanel({
         grid={displayGrid}
         onRowHintsChange={onRowHintsChange}
         onColHintsChange={onColHintsChange}
+        rowCellErrors={validation.rowCellErrors}
+        colCellErrors={validation.colCellErrors}
+        lineErrors={validation.lineErrors}
       />
 
       {/* 【修正点】解答再生: 折りたたみ（solved/unsolvable時のみ表示候補）
