@@ -103,11 +103,17 @@ const HINT_ERROR_OUTLINE_COLOR = '#ef4444'; // red-500相当
 const HINT_ERROR_BG_CLASS = 'bg-red-50';
 
 /**
- * エラージャンプによる一時的な強調色（青）。エラー色（赤）とは別軸の
- * 「現在地」表示であり、エラーが同時に存在する場合は外側にもう1本
- * 重ねて描く（outline-offset をずらすことで2本の枠が干渉しない）。
+ * エラージャンプによる一時的な強調（青）の背景フラッシュ色。
+ * border / outline には一切依存しない。罫線（borderWeightPx で決まる
+ * 5マス太線・外周線・エラー枠）と全く別レイヤーの「オーバーレイ要素の
+ * 背景色」としてのみ使うため、「枠線の一部の辺だけ描かれない」という
+ * 問題が構造的に発生しない。
  */
-const FOCUS_OUTLINE_COLOR = '#2563eb'; // blue-600相当
+const FOCUS_FLASH_BG = 'rgba(37, 99, 235, 0.32)'; // blue-600相当、半透明
+
+/** ジャンプ強調フラッシュの再生時間（ms）。useErrorFocus側の自動解除時間より
+ * 短い「一瞬の合図」として設計し、常時強調にはしない。 */
+const FOCUS_FLASH_DURATION_MS = 900;
 
 // ----------------------------------------------------------------------------
 // 罫線太さ判定（既存ロジック、変更なし）
@@ -226,29 +232,90 @@ function replaceLine(lines: HintLines, lineIndex: number, newLine: number[]): Hi
 }
 
 // ----------------------------------------------------------------------------
-// 強調表示（エラー枠・フォーカス枠）の組み立て
-// outline-* は border-* と独立したレイヤーのため、5マス区切りの罫線設計
-// （borderWeightPx）に一切影響を与えずに「常に四辺が綺麗な1本の枠」を
-// 描ける。エラーとフォーカスが同時に発生した場合は、outline-offset を
-// ずらした2本の枠（内側=赤のエラー枠、外側=青のフォーカス枠）として
-// 重ねる。
+// 強調表示の組み立て
+// - エラー枠（赤）のみ outline-* で描く。outline はレイアウト幅に影響せず、
+//   border の外側に独立した矩形を描くため、5マス区切りの罫線設計
+//   （borderWeightPx）に一切影響を与えずに「常に四辺が揃った1本の枠」を
+//   保証できる。
+// - ジャンプ強調（青）は border/outline を一切使わない別方式
+//   （FocusFlashOverlay、後述）に分離した。理由:
+//     - エラー枠と同時に「もう1本」枠を重ねる設計は、二重の枠線が
+//       要素の内側オフセットや角の処理で衝突し、「一部の辺しか描かれない」
+//       不具合の温床になっていた。
+//     - ジャンプ強調は「常時表示する状態」ではなく「ジャンプした瞬間だけ
+//       再生されるワンショットの合図」であるため、そもそも枠線という
+//       静的な表現よりも、背景色フラッシュ+フェードアウトの方が役割に
+//       合っている。
+// - 結果として、エラー（赤）とジャンプ（青）は完全に別レイヤー・別の
+//   視覚言語（枠 vs 背景フラッシュ）になり、同時に発生しても互いの
+//   視認性を損なわない。
 // ----------------------------------------------------------------------------
-function highlightStyle(hasError: boolean, isFocused: boolean): CSSProperties {
-  if (hasError && isFocused) {
-    return {
-      outline: `2px solid ${HINT_ERROR_OUTLINE_COLOR}`,
-      outlineOffset: '-2px',
-      boxShadow: `0 0 0 4px ${FOCUS_OUTLINE_COLOR}`,
-    };
-  }
+function highlightStyle(hasError: boolean): CSSProperties {
   if (hasError) {
     return { outline: `2px solid ${HINT_ERROR_OUTLINE_COLOR}`, outlineOffset: '-2px' };
   }
-  if (isFocused) {
-    return { boxShadow: `0 0 0 3px ${FOCUS_OUTLINE_COLOR}` };
-  }
   return {};
 }
+
+/**
+ * ジャンプ直後の一時的な強調を「背景色フラッシュ」として描く専用オーバーレイ。
+ *
+ * 設計上の要点:
+ * - position: absolute; inset: 0 で対象セルの矩形にぴったり重なるが、
+ *   border/outline の計算には一切参加しない別要素。このため罫線の太さ・
+ *   色設計、エラー時の bg-red-50 背景、ボタンの hover 背景のいずれとも
+ *   競合しない。
+ * - pointer-events: none にして、クリック・hover などの操作を一切妨げない
+ *   （ヒント編集ポップオーバーを開くクリック動作はそのまま機能する）。
+ * - key={requestId} で毎回新しいDOM要素として再マウントすることで、
+ *   「同じ対象に再度ジャンプしてきた場合でもアニメーションが確実に
+ *   再生される」ことを保証する（useErrorFocus が requestId を毎回更新する
+ *   設計と対応している）。
+ * - アニメーションは Tailwind の任意値アニメーションではなく、インライン
+ *   <style> 経由の @keyframes を一度だけ注入する方式にした。これにより
+ *   グローバルCSSファイルへの追記なしで、このファイル単体で完結する
+ *   （ファイル分割を増やさないための判断）。
+ * - 透明度は 0 → 1（瞬間的にピークへ） → 0 という単純なワンショットで、
+ *   常時強調にはならない「気づけるが居座らない」表現にしている。
+ */
+function FocusFlashOverlay({ requestId }: { requestId: number }) {
+  return (
+    <div
+      key={requestId}
+      aria-hidden="true"
+      style={{
+        position: 'absolute',
+        inset: 0,
+        backgroundColor: FOCUS_FLASH_BG,
+        pointerEvents: 'none',
+        zIndex: 50,
+        animation: `picross-focus-flash ${FOCUS_FLASH_DURATION_MS}ms ease-out forwards`,
+      }}
+    />
+  );
+}
+
+/**
+ * FocusFlashOverlay 用の @keyframes をドキュメントに一度だけ注入する。
+ * モジュール読み込み時に1回だけ実行され、複数の HintLineUnit が同時に
+ * マウントされても重複注入しない（idで存在チェック）。
+ */
+function ensureFocusFlashKeyframes(): void {
+  if (typeof document === 'undefined') return;
+  const STYLE_ID = 'picross-focus-flash-keyframes';
+  if (document.getElementById(STYLE_ID)) return;
+  const style = document.createElement('style');
+  style.id = STYLE_ID;
+  style.textContent = `
+    @keyframes picross-focus-flash {
+      0% { opacity: 0; }
+      15% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+  `;
+  document.head.appendChild(style);
+}
+ensureFocusFlashKeyframes();
 
 // ----------------------------------------------------------------------------
 // 編集ポップオーバー
@@ -271,9 +338,15 @@ function HintEditPopover({
   const inputRef = useRef<HTMLInputElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
+  // 【修正箇所】全選択を廃止し、フォーカスしつつカーソルを末尾に配置する
   useEffect(() => {
-    inputRef.current?.focus();
-    inputRef.current?.select();
+    const input = inputRef.current;
+    if (input) {
+      input.focus();
+      const length = input.value.length;
+      // 選択範囲の開始と終了を文字数の末尾に合わせることで、カーソルを一番右に置く
+      input.setSelectionRange(length, length);
+    }
   }, []);
 
   // ポップオーバー外側のクリックで確定する（テキストフィールドのblurと
@@ -361,7 +434,7 @@ function HintLineUnit({
   outerStyle,
   hasError,
   errorTitle,
-  isFocused,
+  focusRequestId,
   onChange,
   unitRef,
 }: {
@@ -371,7 +444,14 @@ function HintLineUnit({
   outerStyle: CSSProperties;
   hasError: boolean;
   errorTitle: string | null;
-  isFocused: boolean;
+  /**
+   * このユニットが現在のジャンプ対象であるときだけ requestId（毎回
+   * 一意の番号）を渡す。対象でない場合は null。値そのものは使わず、
+   * 「変化したかどうか」だけを FocusFlashOverlay の再マウントトリガーに
+   * 使うため、boolean の isFocused では表現できない「同じ対象への
+   * 再クリックでも再生し直す」要件をここで満たす。
+   */
+  focusRequestId: number | null;
   onChange: (newLine: number[]) => void;
   unitRef?: (el: HTMLDivElement | null) => void;
 }) {
@@ -391,11 +471,14 @@ function HintLineUnit({
 
   const containerStyle: CSSProperties = {
     ...outerStyle,
-    ...highlightStyle(hasError, isFocused),
+    ...highlightStyle(hasError),
     width: isVertical ? CELL_PX : sizePx,
     height: isVertical ? sizePx : CELL_PX,
     boxSizing: 'border-box',
     position: 'relative',
+    // ジャンプ強調オーバーレイ（position: absolute; inset: 0）の基準位置を
+    // このユニット自身にするため overflow は隠さない（バッジやポップオーバー
+    // の表示を妨げないよう、意図的に hidden にしない）。
   };
 
   return (
@@ -428,6 +511,11 @@ function HintLineUnit({
           ))
         )}
       </button>
+
+      {/* ジャンプ強調: エラー枠線(outline)とは完全に別レイヤーの
+          背景フラッシュオーバーレイ。focusRequestId が null でない
+          ときだけ一瞬再生され、エラー表示の視認性を妨げない。 */}
+      {focusRequestId !== null && <FocusFlashOverlay requestId={focusRequestId} />}
 
       {editing && (
         <HintEditPopover
@@ -481,7 +569,12 @@ function ColHints({
         const lineErr = findLineError(lineErrors, 'col', lineIndex);
         const cellErrSummary = cellErrorSummary(cellErrors, lineIndex);
         const errorTitle = [cellErrSummary, lineErr?.message].filter(Boolean).join(' / ') || null;
-        const isFocused = focus?.type === 'col' && focus.index === lineIndex;
+        // このユニットが現在のジャンプ対象なら requestId を渡し、対象でなければ
+        // null にする。requestId は useErrorFocus 側で「呼ばれるたびに必ず
+        // 増える」設計のため、同じ列への再ジャンプでも新しい値になり、
+        // FocusFlashOverlay が key の変化で確実に再マウント=再生される。
+        const focusRequestId =
+          focus?.type === 'col' && focus.index === lineIndex ? focus.requestId : null;
 
         const outerStyle: CSSProperties = {
           boxSizing: 'border-box',
@@ -502,7 +595,7 @@ function ColHints({
             outerStyle={outerStyle}
             hasError={hasError}
             errorTitle={errorTitle}
-            isFocused={isFocused}
+            focusRequestId={focusRequestId}
             onChange={(newLine) => onChange(replaceLine(colHints, lineIndex, newLine))}
             unitRef={(el) => {
               if (!unitRefs) return;
@@ -556,7 +649,8 @@ function RowHints({
         const lineErr = findLineError(lineErrors, 'row', lineIndex);
         const cellErrSummary = cellErrorSummary(cellErrors, lineIndex);
         const errorTitle = [cellErrSummary, lineErr?.message].filter(Boolean).join(' / ') || null;
-        const isFocused = focus?.type === 'row' && focus.index === lineIndex;
+        const focusRequestId =
+          focus?.type === 'row' && focus.index === lineIndex ? focus.requestId : null;
 
         const outerStyle: CSSProperties = {
           boxSizing: 'border-box',
@@ -577,7 +671,7 @@ function RowHints({
             outerStyle={outerStyle}
             hasError={hasError}
             errorTitle={errorTitle}
-            isFocused={isFocused}
+            focusRequestId={focusRequestId}
             onChange={(newLine) => onChange(replaceLine(rowHints, lineIndex, newLine))}
             unitRef={(el) => {
               if (!unitRefs) return;
