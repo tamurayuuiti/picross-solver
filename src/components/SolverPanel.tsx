@@ -27,6 +27,7 @@ import type {
   Grid,
   HintCellError,
   HintErrorTarget,
+  HintLineFocusTarget,
   HintLines,
   HintValidationResult,
   ReplayFrame,
@@ -52,6 +53,8 @@ interface SolverPanelProps {
   readonly onGridChange?: (grid: Grid | SolvedGrid | null) => void;
   /** App.tsx で計算された静的検証結果。solve実行のブロック判定・エラー表示に使う。 */
   readonly validation: HintValidationWithCellSplit;
+  /** エラー一覧等からの「この行/列に注目」指示。PicrossBoardへそのまま橋渡しする。 */
+  readonly focusTarget?: HintLineFocusTarget | null;
 }
 
 function statusLabel(status: string): string {
@@ -405,6 +408,7 @@ export function SolverPanel({
   onColHintsChange,
   onGridChange,
   validation,
+  focusTarget,
 }: SolverPanelProps) {
   const { status, grid, message, target, count, stats, solvedBy, frames, solve, reset } = useSolver();
 
@@ -515,6 +519,7 @@ export function SolverPanel({
         rowCellErrors={validation.rowCellErrors}
         colCellErrors={validation.colCellErrors}
         lineErrors={validation.lineErrors}
+        focusTarget={focusTarget}
       />
 
       {/* 【修正点】解答再生: 折りたたみ（solved/unsolvable時のみ表示候補）

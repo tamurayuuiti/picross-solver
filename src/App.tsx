@@ -26,7 +26,7 @@
 // ============================================================================
 
 import { useMemo, useState } from 'react';
-import type { Grid, HintLines, SolvedGrid } from '@/types';
+import type { Grid, HintLineFocusTarget, HintLines, SolvedGrid } from '@/types';
 import { HintEditor } from '@/components/HintEditor';
 import { SolverPanel } from '@/components/SolverPanel';
 import { BoardPreview } from '@/components/BoardPreview';
@@ -62,6 +62,15 @@ export default function App() {
   const [colHints, setColHints] = useState<HintLines>(() => createEmptyHintLines(DEFAULT_COLS));
   // SolverPanel内部(useSolver)が保持するgridの「表示用ミラー」。
   const [currentGrid, setCurrentGrid] = useState<Grid | SolvedGrid | null>(null);
+
+  /**
+   * 「エラー一覧/エラー行番号から、盤面側ヒントセルへジャンプする」ための
+   * 注目対象。HintEditor のエラー行クリック等から更新され、PicrossBoard に
+   * そのまま渡してスクロールジャンプ＋一時ハイライトを発生させる。
+   * 同じ行が再クリックされても確実に再発火するよう、毎回新しいオブジェクト
+   * 参照として更新する（PicrossBoard側はuseEffectの依存配列でこれを見る）。
+   */
+  const [focusTarget, setFocusTarget] = useState<HintLineFocusTarget | null>(null);
 
   // ----------------------------------------------------------------------------
   // ヒント入力の静的検証（solvePicrossを呼ぶ前に判定できるエラー）。
@@ -178,6 +187,7 @@ export default function App() {
                   onChange={setRowHints}
                   cellErrors={validation.rowCellErrors}
                   lineErrors={validation.lineErrors}
+                  onRequestFocus={setFocusTarget}
                 />
                 <HintEditor
                   title="列ヒント"
@@ -186,6 +196,7 @@ export default function App() {
                   onChange={setColHints}
                   cellErrors={validation.colCellErrors}
                   lineErrors={validation.lineErrors}
+                  onRequestFocus={setFocusTarget}
                 />
               </div>
             </section>
@@ -208,6 +219,7 @@ export default function App() {
             onColHintsChange={setColHints}
             onGridChange={setCurrentGrid}
             validation={validation}
+            focusTarget={focusTarget}
           />
         </main>
       </div>
