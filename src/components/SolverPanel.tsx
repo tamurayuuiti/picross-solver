@@ -2,6 +2,19 @@
 // SolverPanel.tsx
 // 既存の useSolver（→ solvePicross.ts）を駆動し、結果を PicrossBoard に
 // 渡して表示するパネル。
+//
+// デザイン改修メモ（ロジック・状態管理・イベントフローは無変更）:
+// - 操作行（解く/リセット/状態表示）・アラート・盤面・解答再生・統計を
+//   すべて Card で統一し、1つの「解析パネル」として連続性のある見た目に
+//   まとめた。
+// - 統計パネルは「開発者向けデバッグ情報」ではなく「解析結果」として
+//   自然に見えるよう、見出しを変更し、難易度ヒントを先頭に出す構成に
+//   した（表示するデータ自体・取得元ロジックは無変更）。
+// - エラー・矛盾・警告系の表示はすべて ui.tsx の Alert に統一し、色・
+//   アイコン・枠線の表現をPicrossBoard/HintEditor側のエラー表示と
+//   揃えた。
+// - 折りたたみセクション（統計・解答再生）のヘッダーは DisclosureHeader
+//   に統一。開閉ロジック自体は既存のまま。
 // ============================================================================
 
 import { useEffect, useRef, useState } from 'react';
@@ -21,6 +34,7 @@ import type {
 } from '../types';
 import { useSolver } from '@/hooks/useSolver';
 import { PicrossBoard } from './PicrossBoard';
+import { Alert, Badge, Button, Card, DisclosureHeader, StatusDot } from '@/components/ui';
 
 interface HintValidationWithCellSplit extends HintValidationResult {
   readonly rowCellErrors: readonly HintCellError[];
@@ -50,14 +64,14 @@ function statusLabel(status: string): string {
   }
 }
 
-function statusDotClass(status: string): string {
+function statusDotTone(status: string): 'success' | 'progress' | 'danger' | 'neutral' {
   switch (status) {
-    case 'solved': return 'bg-emerald-500';
-    case 'running': return 'bg-amber-500';
+    case 'solved': return 'success';
+    case 'running': return 'progress';
     case 'unsolvable':
     case 'contradiction':
-    case 'invalid-hints': return 'bg-red-500';
-    default: return 'bg-slate-300';
+    case 'invalid-hints': return 'danger';
+    default: return 'neutral';
   }
 }
 
@@ -90,22 +104,17 @@ function StaticErrorBanner({ validation }: { readonly validation: HintValidation
   if (summaries.length === 0) return null;
 
   return (
-    <div className="flex items-start gap-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-      <span className="mt-0.5 flex-none rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
-        !
-      </span>
-      <div className="space-y-0.5">
-        <p className="font-medium">入力内容に問題があるため、解析を実行できません</p>
-        <ul className="list-inside list-disc text-xs text-amber-700">
-          {summaries.map((s) => (
-            <li key={s}>{s}</li>
-          ))}
-        </ul>
-        <p className="text-xs text-amber-600">
-          左側のヒント入力欄、または盤面に隣接するヒントセルの赤枠箇所を確認してください。
-        </p>
-      </div>
-    </div>
+    <Alert tone="warning">
+      <p className="font-medium">入力内容に問題があるため、解析を実行できません</p>
+      <ul className="list-inside list-disc text-xs">
+        {summaries.map((s) => (
+          <li key={s}>{s}</li>
+        ))}
+      </ul>
+      <p className="text-xs opacity-80">
+        左側のヒント入力欄、または盤面に隣接するヒントセルの赤枠箇所を確認してください。
+      </p>
+    </Alert>
   );
 }
 
@@ -130,33 +139,29 @@ function ContradictionAlert({
     : null;
 
   return (
-    <div className="flex items-start gap-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-      <span className="mt-0.5 flex-none rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
-        !
-      </span>
-      <div className="space-y-0.5">
-        <p className="font-medium">{message}</p>
-        {targetLabel && (
-          <p className="flex items-center gap-2 text-xs text-red-600">
-            <span>矛盾箇所: {targetLabel}</span>
-            {target && onRequestFocus && (
-              <button
-                type="button"
-                onClick={() => onRequestFocus(target, source)}
-                className="rounded border border-red-300 bg-white px-2 py-0.5 font-medium text-red-700 underline-offset-2 hover:bg-red-100 hover:underline"
-              >
-                ここに移動
-              </button>
-            )}
-          </p>
-        )}
-      </div>
-    </div>
+    <Alert tone="danger">
+      <p className="font-medium">{message}</p>
+      {targetLabel && (
+        <p className="flex items-center gap-2 text-xs opacity-90">
+          <span>矛盾箇所: {targetLabel}</span>
+          {target && onRequestFocus && (
+            <Button
+              variant="secondary"
+              size="sm"
+              className="border-red-300 bg-white px-2 py-0.5 text-red-700 hover:bg-red-100"
+              onClick={() => onRequestFocus(target, source)}
+            >
+              ここに移動
+            </Button>
+          )}
+        </p>
+      )}
+    </Alert>
   );
 }
 
 // ----------------------------------------------------------------------------
-// 統計パネル
+// 統計パネル（「解析結果」として表示。デバッグ情報然とした見せ方を避ける）
 // ----------------------------------------------------------------------------
 function StatsPanel({ stats, solvedBy }: { readonly stats: SolverStats; readonly solvedBy?: SolvedBy }) {
   const [open, setOpen] = useState(false);
@@ -169,47 +174,40 @@ function StatsPanel({ stats, solvedBy }: { readonly stats: SolverStats; readonly
         : null;
 
   return (
-    <div className="rounded border border-slate-200 bg-white">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
-      >
-        <span>統計情報</span>
-        <span className="text-xs text-slate-400">{open ? '▲ 閉じる' : '▼ 表示'}</span>
-      </button>
+    <Card tight className="p-0">
+      <DisclosureHeader label="解析結果" open={open} onToggle={() => setOpen((v) => !v)} />
       {open && (
-        <div className="border-t border-slate-100 px-3 py-3">
+        <div className="border-t border-slate-100 px-4 py-3">
           {difficultyHint && (
             <p className="mb-3 text-xs font-medium text-slate-500">{difficultyHint}</p>
           )}
           <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
             <div>
-              <dt className="text-xs text-slate-500">実行時間</dt>
-              <dd className="font-mono font-medium">{stats.elapsedMs.toFixed(1)} ms</dd>
+              <dt className="text-xs text-slate-400">実行時間</dt>
+              <dd className="font-mono font-medium text-slate-700">{stats.elapsedMs.toFixed(1)} ms</dd>
             </div>
             <div>
-              <dt className="text-xs text-slate-500">総試行数</dt>
-              <dd className="font-mono font-medium">{stats.count}</dd>
+              <dt className="text-xs text-slate-400">総試行数</dt>
+              <dd className="font-mono font-medium text-slate-700">{stats.count}</dd>
             </div>
             <div>
-              <dt className="text-xs text-slate-500">仮定回数</dt>
-              <dd className="font-mono font-medium">{stats.assumptionCount}</dd>
+              <dt className="text-xs text-slate-400">仮定回数</dt>
+              <dd className="font-mono font-medium text-slate-700">{stats.assumptionCount}</dd>
             </div>
             <div>
-              <dt className="text-xs text-slate-500">最大探索深度</dt>
-              <dd className="font-mono font-medium">{stats.maxDepth}</dd>
+              <dt className="text-xs text-slate-400">最大探索深度</dt>
+              <dd className="font-mono font-medium text-slate-700">{stats.maxDepth}</dd>
             </div>
             <div>
-              <dt className="text-xs text-slate-500">使用フェーズ</dt>
-              <dd className="font-mono font-medium">
+              <dt className="text-xs text-slate-400">使用フェーズ</dt>
+              <dd className="font-mono font-medium text-slate-700">
                 {solvedBy === 'humanistic' ? 'humanistic' : solvedBy === 'backtrack' ? 'backtrack' : '-'}
               </dd>
             </div>
           </dl>
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -277,58 +275,42 @@ function ReplayPanel({
   const hasFrames = frames.length > 0;
 
   return (
-    <div className="rounded border border-slate-200 bg-white">
-      <button
-        type="button"
-        onClick={handleToggleOpen}
-        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
-      >
-        <span>解答再生</span>
-        <span className="text-xs text-slate-400">{open ? '▲ 閉じる' : '▼ 表示'}</span>
-      </button>
+    <Card tight className="p-0">
+      <DisclosureHeader label="解答再生" open={open} onToggle={handleToggleOpen} />
       {open && (
-        <div className="border-t border-slate-100 px-3 py-3">
+        <div className="border-t border-slate-100 px-4 py-3">
           {!hasFrames ? (
             <p className="text-xs text-slate-400">再生可能な探索ステップがありません。</p>
           ) : (
             <>
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={handleStepBack}
                   disabled={frameIndex <= 0}
-                  className="rounded border border-slate-300 px-2 py-1.5 text-sm hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
                   aria-label="一つ前のステップ"
                 >
                   ◀
-                </button>
+                </Button>
                 {isPlaying ? (
-                  <button
-                    type="button"
-                    onClick={handlePause}
-                    className="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium hover:bg-slate-100"
-                  >
+                  <Button variant="secondary" onClick={handlePause}>
                     一時停止
-                  </button>
+                  </Button>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={handlePlay}
-                    disabled={lastIndex === 0}
-                    className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
+                  <Button variant="primary" onClick={handlePlay} disabled={lastIndex === 0}>
                     再生
-                  </button>
+                  </Button>
                 )}
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={handleStepForward}
                   disabled={frameIndex >= lastIndex}
-                  className="rounded border border-slate-300 px-2 py-1.5 text-sm hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
                   aria-label="一つ次のステップ"
                 >
                   ▶
-                </button>
+                </Button>
                 <input
                   type="range"
                   min={0}
@@ -336,7 +318,7 @@ function ReplayPanel({
                   step={1}
                   value={frameIndex}
                   onChange={(e) => handleSliderChange(Number(e.target.value))}
-                  className="flex-1"
+                  className="flex-1 accent-slate-700"
                 />
                 <span className="flex-none font-mono text-xs text-slate-500">
                   {frameIndex + 1} / {frames.length}
@@ -367,7 +349,7 @@ function ReplayPanel({
           )}
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -441,27 +423,25 @@ export function SolverPanel({
     <div className="space-y-4">
       <StaticErrorBanner validation={validation} />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-          onClick={handleSolve}
-          disabled={!canSolve}
-          title={canSolve ? undefined : '入力エラーを修正してから実行してください'}
-        >
-          解く
-        </button>
-        <button
-          className="rounded border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-100"
-          onClick={reset}
-        >
-          リセット
-        </button>
-        <span className="ml-2 flex items-center gap-1.5 text-sm">
-          <span className={`h-2 w-2 rounded-full ${statusDotClass(status)}`} />
-          状態: {statusLabel(status)}
-          <span className="ml-3 text-slate-500">試行回数: {count}</span>
-        </span>
-      </div>
+      <Card>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="primary" onClick={handleSolve} disabled={!canSolve}
+            title={canSolve ? undefined : '入力エラーを修正してから実行してください'}
+          >
+            解く
+          </Button>
+          <Button variant="secondary" onClick={reset}>
+            リセット
+          </Button>
+          <span className="ml-2 flex items-center gap-1.5 text-sm text-slate-600">
+            <StatusDot tone={statusDotTone(status)} />
+            状態: {statusLabel(status)}
+            <Badge tone="neutral" className="ml-1">
+              試行回数: {count}
+            </Badge>
+          </span>
+        </div>
+      </Card>
 
       {status === 'contradiction' && message && (
         <ContradictionAlert

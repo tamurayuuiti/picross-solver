@@ -9,6 +9,15 @@
 // - solverロジック・state構造は無改修。SolverPanel が保持する grid をそのまま
 //   渡してもらうだけで完結する。
 //
+// デザイン改修メモ:
+// - 見出し（"全体プレビュー"）は App.tsx 側の Card + SectionHeading が
+//   担うようになったため、ここでの重複した <h2> は削除した（情報構造の
+//   変更ではなく、見出しの所有元を1か所に統一しただけ）。
+// - 枠のスタイルをCard全体のトーン（slate-200の枠線）に合わせて軽量化。
+//   「主役は盤面、プレビューは補助」という位置づけを保つため、枠自体は
+//   控えめにし、キャンバスの描画ロジック（cellColor等）には一切手を
+//   入れていない。
+//
 // 描画方式の選定理由（Canvas を採用）:
 // - 大規模盤面（100×100以上）では、DOM要素方式だと1万個以上のdiv/inputが
 //   メイン盤面と合わせて二重に生成され、レイアウト計算・スタイル計算の
@@ -169,15 +178,12 @@ export function BoardPreview({ rows, cols, grid, onCellClick, viewportRect }: Bo
     : undefined;
 
   return (
-    <div className="space-y-2">
-      <h2 className="text-sm font-semibold text-slate-600">全体プレビュー</h2>
-      <div className="inline-block rounded border border-slate-300 bg-white p-1">
-        <canvas
-          ref={canvasRef}
-          style={{ width: widthCss, height: heightCss, display: 'block' }}
-          onClick={handleClick}
-        />
-      </div>
+    <div className="inline-block rounded-md border border-slate-200 bg-slate-50 p-1.5">
+      <canvas
+        ref={canvasRef}
+        style={{ width: widthCss, height: heightCss, display: 'block' }}
+        onClick={handleClick}
+      />
     </div>
   );
 }

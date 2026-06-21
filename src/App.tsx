@@ -9,6 +9,13 @@
 // - 盤面サイズ（rows / cols）は独立したStateを持たず、HintLinesのlengthから
 //   自動的に算出されます。
 // - サイズ入力UIを撤廃し、代わりに「初期サイズテンプレート」機能を追加しました。
+//
+// デザイン改修（機能・状態管理は無変更）:
+// - 各セクションを ui.tsx の Card / SectionHeading / Button に統一し、
+//   「プリセット」「テンプレート」「ヒント入力」「プレビュー」がそれぞれ
+//   独立したカードとして並ぶ、一貫した管理画面風のレイアウトに変更。
+// - プレビューはカード化しつつ、見出しを補助情報らしい控えめな
+//   トーンに留め、過度に目立たせない（要件どおり「主役は盤面」）。
 // ============================================================================
 
 import { useMemo, useState } from 'react';
@@ -19,6 +26,7 @@ import { BoardPreview } from '@/components/BoardPreview';
 import { PRESETS } from '@/presets';
 import { validateHints } from '@/validation/hintValidation';
 import { useErrorFocus } from '@/hooks/useErrorFocus';
+import { Button, Card, SectionHeading } from '@/components/ui';
 
 const DEFAULT_ROWS = 5;
 const DEFAULT_COLS = 5;
@@ -57,50 +65,47 @@ export default function App() {
 
   return (
     <div className="flex min-h-screen md:h-screen flex-col bg-slate-50 text-slate-900">
-      <header className="flex-none border-b border-slate-200 bg-white px-6 py-3 shadow-sm">
-        <h1 className="text-xl font-bold">Picross Solver</h1>
+      <header className="flex-none border-b border-slate-200 bg-white px-6 py-3.5">
+        <h1 className="text-[15px] font-semibold tracking-tight text-slate-900">
+          Picross Solver
+        </h1>
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        <aside className="order-1 flex-none overflow-y-auto border-slate-200 bg-white p-4 md:w-80 md:border-r md:p-6">
-          <div className="space-y-6">
-            <section className="space-y-3 rounded border border-slate-200 bg-slate-50 p-4">
-              <h2 className="text-sm font-semibold text-slate-600">開発用プリセット</h2>
+        <aside className="order-1 flex-none overflow-y-auto bg-slate-50 p-4 md:w-80 md:p-5">
+          <div className="space-y-4">
+            <Card>
+              <SectionHeading>開発用プリセット</SectionHeading>
               <div className="flex flex-wrap gap-2">
                 {PRESETS.map((preset) => (
-                  <button
+                  <Button
                     key={preset.id}
+                    variant="subtle-accent"
+                    size="sm"
                     onClick={() => handleApplyPreset(preset.id)}
-                    className="rounded bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-100 active:bg-indigo-200"
                   >
                     {preset.name}
-                  </button>
+                  </Button>
                 ))}
               </div>
-            </section>
+            </Card>
 
             {/* 盤面サイズ入力を廃止し、初期サイズテンプレートに置き換え */}
-            <section className="space-y-3">
-              <h2 className="text-sm font-semibold text-slate-600">初期サイズテンプレート</h2>
-              <p className="text-xs text-slate-500">
-                空の盤面から作成を始めるための補助機能です。<br />
-                適用後もテキスト入力で自由に改行・行削除が可能です。
-              </p>
+            <Card>
+              <SectionHeading description="空の盤面から作成を始めるための補助機能です。適用後もテキスト入力で自由に改行・行削除が可能です。">
+                初期サイズテンプレート
+              </SectionHeading>
               <div className="flex flex-wrap gap-2">
                 {[5, 10, 15, 20].map((size) => (
-                  <button
-                    key={size}
-                    onClick={() => handleApplyTemplate(size)}
-                    className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 active:bg-slate-100"
-                  >
+                  <Button key={size} variant="secondary" size="sm" onClick={() => handleApplyTemplate(size)}>
                     {size} × {size}
-                  </button>
+                  </Button>
                 ))}
               </div>
-            </section>
+            </Card>
 
-            <section className="space-y-4">
-              <h2 className="text-sm font-semibold text-slate-600">ヒント入力</h2>
+            <Card>
+              <SectionHeading>ヒント入力</SectionHeading>
               <div className="flex flex-wrap gap-4">
                 <HintEditor
                   title="行ヒント"
@@ -121,15 +126,16 @@ export default function App() {
                   onRequestFocus={(target) => requestFocus(target, 'validation')}
                 />
               </div>
-            </section>
+            </Card>
 
-            <section className="pt-2 border-t border-slate-100">
+            <Card>
+              <SectionHeading>全体プレビュー</SectionHeading>
               <BoardPreview rows={rows} cols={cols} grid={currentGrid} />
-            </section>
+            </Card>
           </div>
         </aside>
 
-        <main className="order-2 min-h-0 min-w-0 flex-1 overflow-auto p-4 md:p-6">
+        <main className="order-2 min-h-0 min-w-0 flex-1 overflow-auto bg-slate-50 p-4 md:p-5">
           <SolverPanel
             rowHints={rowHints}
             colHints={colHints}

@@ -36,11 +36,18 @@
 //   変化した場合も、親から渡された lines が自分のテキスト由来の lines と
 //   一致しないときはテキスト表示をその lines に再同期する。これにより、
 //   テキスト⇔盤面の双方向同期が成立する（状態は App.tsx の単一ソースのまま）。
+//
+// デザイン改修メモ（ロジック・状態管理は無変更）:
+// - エラー件数バッジを ui.tsx の Badge（danger tone）に統一。盤面側
+//   （PicrossBoard）やSolverPanel側のエラー表示と同じ赤トーンで揃える。
+// - 行番号ガター・テキストエリアの枠線色・角丸を共通トークンに統一
+//   （slate-200の通常枠、エラー時はred-200+red-50背景）。
 // ============================================================================
 
 import { useEffect, useRef, useState } from 'react';
 import type { HintCellError, HintLineError, HintLineFocusTarget, HintLines } from '@/types';
 import { findLineError, validateRawHintText } from '@/validation/hintValidation';
+import { Badge } from '@/components/ui';
 
 interface HintEditorProps {
   readonly title: string;
@@ -183,12 +190,8 @@ export function HintEditor({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <h3 className="text-sm font-medium">{title}</h3>
-        {hasError && (
-          <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">
-            {errorLineIndexes.size}件のエラー
-          </span>
-        )}
+        <h3 className="text-sm font-medium text-slate-700">{title}</h3>
+        {hasError && <Badge tone="danger">{errorLineIndexes.size}件のエラー</Badge>}
       </div>
 
       {/* テキストボックス本体 + 行番号オーバーレイ。
@@ -198,7 +201,7 @@ export function HintEditor({
       <div className="flex">
         <div
           ref={lineNumberRef}
-          className="h-40 w-7 flex-none select-none overflow-hidden rounded-l border border-r-0 border-slate-300 bg-slate-50 py-2 text-right font-mono text-[11px] text-slate-400"
+          className="h-40 w-7 flex-none select-none overflow-hidden rounded-l-md border border-r-0 border-slate-200 bg-slate-50 py-2 text-right font-mono text-[11px] text-slate-400"
         >
           {Array.from({ length: lineCount }, (_, i) => {
             const isErrorLine = errorLineIndexes.has(i);
@@ -220,10 +223,10 @@ export function HintEditor({
         </div>
         <textarea
           ref={textareaRef}
-          className={`h-40 w-32 resize-none rounded-r border p-2 font-mono text-sm outline-none ${
+          className={`h-40 w-32 resize-none rounded-r-md border p-2 font-mono text-sm outline-none ${
             hasError
-              ? 'border-red-400 bg-red-50 focus:border-red-500'
-              : 'border-slate-300 focus:border-slate-600'
+              ? 'border-red-200 bg-red-50 focus:border-red-400'
+              : 'border-slate-200 focus:border-slate-400'
           }`}
           style={{ lineHeight: `${LINE_HEIGHT_PX}px` }}
           value={text}

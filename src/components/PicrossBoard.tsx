@@ -89,8 +89,8 @@ const MAJOR_INTERVAL = 5;
 
 /** 通常罫線の色（盤面用） */
 const BOARD_MINOR_BORDER_COLOR = '#94a3b8'; // slate-400相当
-/** 盤面本体の外枠線の色 */
-const BOARD_OUTER_BORDER_COLOR = '#475569'; // slate-600相当
+/** 盤面本体の外枠線の色（デザイン改修: コントラストを少し強め視認性を維持） */
+const BOARD_OUTER_BORDER_COLOR = '#334155'; // slate-700相当
 /** ヒントグリッドの罫線色（主軸・直交軸とも共通、交点ブロックも同色） */
 const HINT_BORDER_COLOR = '#cbd5e1'; // slate-300相当
 
@@ -366,7 +366,7 @@ function HintEditPopover({
   return (
     <div
       ref={popoverRef}
-      className="absolute z-40 rounded border border-slate-400 bg-white p-1.5 shadow-lg"
+      className="absolute z-40 rounded-md border border-slate-300 bg-white p-1.5 shadow-md"
       style={{
         // 行ヒントは右側、列ヒントは下側にポップオーバーを開く。
         // どちらの軸でも横長の入力欄として表示するため、狭いセル内に
@@ -392,7 +392,7 @@ function HintEditPopover({
             onCancel();
           }
         }}
-        className="w-28 rounded border border-slate-300 px-2 py-1 text-center font-mono text-sm outline-none ring-2 ring-inset ring-slate-600 focus:ring-slate-700"
+        className="w-28 rounded-md border border-slate-300 px-2 py-1 text-center font-mono text-sm outline-none ring-2 ring-inset ring-indigo-400 focus:ring-indigo-500"
         placeholder="3 1 2"
       />
       <p className="mt-1 text-center text-[10px] text-slate-400">Enterで確定 / Escでキャンセル</p>
@@ -494,7 +494,7 @@ function HintLineUnit({
         title={errorTitle ?? `クリックして編集（${orientation === 'row' ? '行' : '列'}全体をテキストで編集できます）`}
         className={`flex h-full w-full items-center justify-center ${
           isVertical ? 'flex-col' : 'flex-row'
-        } gap-0.5 px-0.5 py-0.5 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400`}
+        } gap-0.5 px-0.5 py-0.5 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400`}
       >
         {line.length === 0 ? (
           <span className="text-[11px] text-slate-300">―</span>
@@ -502,8 +502,8 @@ function HintLineUnit({
           line.map((value, i) => (
             <span
               key={i}
-              className={`rounded px-1 font-mono text-[11px] leading-tight sm:text-xs ${
-                hasError ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'
+              className={`rounded-sm px-1 font-mono text-[11px] leading-tight sm:text-xs ${
+                hasError ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'
               }`}
             >
               {value}
@@ -764,7 +764,7 @@ export function PicrossBoard({
 
   return (
     // 単一スクロールコンテナ: 盤面・行ヒント・列ヒント・交点はすべてこの中に存在する。
-    <div className="max-h-[70vh] max-w-full overflow-auto rounded border border-slate-300 bg-white">
+    <div className="max-h-[70vh] max-w-full overflow-auto rounded-lg border border-slate-300 bg-white">
       <div className="inline-grid" style={{ gridTemplateColumns: 'auto 1fr' }}>
         {/* 左上交点: 行ヒント上辺・列ヒント左辺が連続するよう、1セルごとの
             グリッドとして描画する（罫線なしの空白divではない）。 */}
