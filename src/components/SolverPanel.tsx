@@ -1,25 +1,7 @@
 // ============================================================================
 // SolverPanel.tsx
 // 既存の useSolver（→ solvePicross.ts）を駆動し、結果を PicrossBoard に
-// 渡して表示するパネル。新ヒントUIから得た rowHints/colHints をそのまま
-// solve() に渡すだけで接続する。solvePicross.ts のジェネレーター駆動ロジック
-// は無改修（useSolverはstats/frames伝播のみ拡張）。
-//
-// 情報設計（ユーザーの動線に沿った配置 - 今回の修正で最適化）:
-//   入力 → 実行（操作バー） → 結果確認（矛盾アラート / 盤面）
-//        → 解答再生（折りたたみ、solved/unsolvable時）★盤面の直下に引き上げ
-//        → 統計確認（折りたたみ） ★最下部へ配置換え
-//
-// 変更点（解答再生の完全実装）:
-// - useSolver が公開する frames（ReplayFrame[]）を使い、再生・一時停止・
-//   スライダー・ステップ表示を備えた ReplayPanel を実装した。
-// - 再生中は PicrossBoard に渡す grid を「現在の再生フレームの盤面」に
-//   差し替える。再生を止める（パネルを閉じる）と、実際の solve 結果の
-//   盤面（useSolver の grid）にそのまま戻る。
-// - 再生のオン/オフと現在フレーム位置は SolverPanel のローカル state として
-//   持つ。useSolver / solvePicross.ts には一切手を加えていない。
-// - 自動再生は setInterval で一定間隔ごとに1フレーム進める単純な実装。
-//   末尾に到達したら自動停止する。
+// 渡して表示するパネル。
 // ============================================================================
 
 import { useEffect, useRef, useState } from 'react';
@@ -40,7 +22,6 @@ import type {
 import { useSolver } from '@/hooks/useSolver';
 import { PicrossBoard } from './PicrossBoard';
 
-/** App.tsx の validateHints が返す拡張結果（rowCellErrors/colCellErrorsを含む）。 */
 interface HintValidationWithCellSplit extends HintValidationResult {
   readonly rowCellErrors: readonly HintCellError[];
   readonly colCellErrors: readonly HintCellError[];
@@ -51,55 +32,32 @@ interface SolverPanelProps {
   readonly colHints: HintLines;
   readonly onRowHintsChange: (lines: HintLines) => void;
   readonly onColHintsChange: (lines: HintLines) => void;
-  /** 現在のsolver盤面状態をサイドバーのプレビュー等へ伝播するための通知。任意。 */
   readonly onGridChange?: (grid: Grid | SolvedGrid | null) => void;
-  /** App.tsx で計算された静的検証結果。solve実行のブロック判定・エラー表示に使う。 */
   readonly validation: HintValidationWithCellSplit;
-  /**
-   * 現在強調表示すべき対象（App.tsx の useErrorFocus が一元管理）。
-   * テキスト入力欄・盤面側ヒントセル・このパネル内の矛盾アラートの
-   * いずれからのジャンプ要求でも、同じ focus を見て同じ強調表示を行う。
-   */
   readonly focus?: HintErrorFocus | null;
-  /**
-   * エラー表示（矛盾アラート・解なしアラート）からのジャンプ要求の入口。
-   * App.tsx の requestFocus をそのまま受け取り、PicrossBoard 側のクリックと
-   * 完全に同じ経路でフォーカスを発生させる。
-   */
   readonly onRequestFocus?: (target: HintLineFocusTarget, source: HintErrorSource) => void;
 }
 
 function statusLabel(status: string): string {
   switch (status) {
-    case 'idle':
-      return '待機中';
-    case 'running':
-      return '解析中...';
-    case 'solved':
-      return '解けました';
-    case 'unsolvable':
-      return '解なし';
-    case 'contradiction':
-      return 'ヒントに矛盾';
-    case 'invalid-hints':
-      return 'ヒントが不正';
-    default:
-      return status;
+    case 'idle': return '待機中';
+    case 'running': return '解析中...';
+    case 'solved': return '解けました';
+    case 'unsolvable': return '解なし';
+    case 'contradiction': return 'ヒントに矛盾';
+    case 'invalid-hints': return 'ヒントが不正';
+    default: return status;
   }
 }
 
 function statusDotClass(status: string): string {
   switch (status) {
-    case 'solved':
-      return 'bg-emerald-500';
-    case 'running':
-      return 'bg-amber-500';
+    case 'solved': return 'bg-emerald-500';
+    case 'running': return 'bg-amber-500';
     case 'unsolvable':
     case 'contradiction':
-    case 'invalid-hints':
-      return 'bg-red-500';
-    default:
-      return 'bg-slate-300';
+    case 'invalid-hints': return 'bg-red-500';
+    default: return 'bg-slate-300';
   }
 }
 
@@ -111,32 +69,21 @@ function phaseLabel(phase: ReplayFrame['phase']): string {
 
 function frameTypeLabel(type: ReplayFrame['type']): string {
   switch (type) {
-    case 'progress':
-      return '探索中';
-    case 'solved':
-      return '解確定';
-    case 'contradiction':
-      return '矛盾検出';
-    default:
-      return type;
+    case 'progress': return '探索中';
+    case 'solved': return '解確定';
+    case 'contradiction': return '矛盾検出';
+    default: return type;
   }
 }
 
 // ----------------------------------------------------------------------------
 // 静的エラー集約バナー
-// 「実行」フェーズの直前に表示する全体エラー。solvePicrossを呼ぶ前に
-// 判明している問題（サイズ不整合・ヒント総和オーバー・入力形式エラー）を
-// まとめて伝え、「なぜ解けないか」を実行前から把握できるようにする。
-// 個別の詳細は HintEditor / PicrossBoard 側の局所表示に譲り、ここでは
-// 「件数 + 種別ごとの要約」のみを示す（情報量を絞り、過剰な赤化を避ける）。
 // ----------------------------------------------------------------------------
 function StaticErrorBanner({ validation }: { readonly validation: HintValidationWithCellSplit }) {
   const cellErrorCount = validation.rowCellErrors.length + validation.colCellErrors.length;
   const lineErrorCount = validation.lineErrors.length;
-  const globalErrorCount = validation.globalErrors.length;
 
   const summaries: string[] = [];
-  if (globalErrorCount > 0) summaries.push(`盤面サイズの不一致（${globalErrorCount}件）`);
   if (lineErrorCount > 0) summaries.push(`ヒントの合計が盤面サイズを超えている行/列（${lineErrorCount}件）`);
   if (cellErrorCount > 0) summaries.push(`入力値の形式エラー（${cellErrorCount}件）`);
 
@@ -161,17 +108,9 @@ function StaticErrorBanner({ validation }: { readonly validation: HintValidation
     </div>
   );
 }
+
 // ----------------------------------------------------------------------------
 // 矛盾アラート
-// 「結果確認」フェーズの一部として、操作バー直下に常時表示（発生時のみ）。
-// 折りたたみにしない理由: エラーは気づく必要があるため。
-//
-// 変更点（エラージャンプの統一）:
-// - target が分かっている場合（矛盾検出時）は、テキスト入力欄のエラー一覧
-//   と全く同じ requestFocus(target, source) を呼ぶ「ここに移動」ボタンを
-//   表示する。表示場所がテキスト欄か盤面かSolverPanelかに関わらず、
-//   クリック後に起きること（スクロール→強調→自動解除）は1つの仕組み
-//   （useErrorFocus）に統一されているため、挙動の差は生まれない。
 // ----------------------------------------------------------------------------
 function ContradictionAlert({
   message,
@@ -217,10 +156,7 @@ function ContradictionAlert({
 }
 
 // ----------------------------------------------------------------------------
-// 統計パネル（折りたたみ式）
-// 「統計確認」フェーズ。盤面のすぐ下、デフォルトは閉じる。
-// solvedBy によって「論理だけで解けた」/「N回の仮定が必要だった」の
-// 難易度的な一言を添える（将来の難易度表示の足がかり）。
+// 統計パネル
 // ----------------------------------------------------------------------------
 function StatsPanel({ stats, solvedBy }: { readonly stats: SolverStats; readonly solvedBy?: SolvedBy }) {
   const [open, setOpen] = useState(false);
@@ -278,9 +214,7 @@ function StatsPanel({ stats, solvedBy }: { readonly stats: SolverStats; readonly
 }
 
 // ----------------------------------------------------------------------------
-// 解答再生パネル（完全実装）
-// 「解答再生」フェーズ。盤面の探索過程（frames）を再生・一時停止・スライダー・
-// ステップ単位で確認できる。
+// 解答再生パネル
 // ----------------------------------------------------------------------------
 const PLAYBACK_INTERVAL_MS = 120;
 
@@ -494,10 +428,6 @@ export function SolverPanel({
     onGridChange?.(displayGrid);
   }, [displayGrid, onGridChange]);
 
-  // 静的検証でエラーが見つかっている間は、solvePicrossを実行しても
-  // 矛盾/解なしとして空虚な結果しか返らない（あるいは無意味な探索コストが
-  // かかる）ため、「解く」ボタン自体を無効化する。これにより、ユーザーは
-  // 「実行→失敗」の往復をせず、入力修正に直接向かえる。
   const canSolve = !validation.hasError;
 
   const handleSolve = () => {
@@ -509,10 +439,8 @@ export function SolverPanel({
 
   return (
     <div className="space-y-4">
-      {/* 実行直前: 静的エラー集約バナー（solvePicrossを呼ぶ前に判明している問題） */}
       <StaticErrorBanner validation={validation} />
 
-      {/* 実行: 操作バー + ステータス表示 */}
       <div className="flex flex-wrap items-center gap-2">
         <button
           className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
@@ -535,7 +463,6 @@ export function SolverPanel({
         </span>
       </div>
 
-      {/* 結果確認: 矛盾アラート（発生時のみ、常時表示） */}
       {status === 'contradiction' && message && (
         <ContradictionAlert
           message={message}
@@ -554,7 +481,6 @@ export function SolverPanel({
         />
       )}
 
-      {/* 結果確認: 盤面（再生中は再生フレームの盤面を表示） */}
       <PicrossBoard
         rowHints={rowHints}
         colHints={colHints}
@@ -568,8 +494,6 @@ export function SolverPanel({
         onRequestFocus={onRequestFocus}
       />
 
-      {/* 【修正点】解答再生: 折りたたみ（solved/unsolvable時のみ表示候補）
-          盤面の直下（統計情報の上）に移動し、視線移動とスクロールの負担を解消 */}
       {canReplay && (
         <ReplayPanel
           frames={frames}
@@ -581,8 +505,6 @@ export function SolverPanel({
         />
       )}
 
-      {/* 【修正点】統計確認: 折りたたみ（statsがあるときのみ表示）
-          読物UIとして最下部に配置換え */}
       {stats && <StatsPanel stats={stats} solvedBy={solvedBy} />}
     </div>
   );
