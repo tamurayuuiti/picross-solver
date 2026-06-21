@@ -360,3 +360,30 @@ export interface HintLineFocusTarget {
   readonly type: 'row' | 'col';
   readonly index: number;
 }
+
+// ----------------------------------------------------------------------------
+// 共通エラーフォーカス管理（useErrorFocus）が使う型
+//
+// 「テキスト入力欄のエラー一覧」「盤面側ヒントセルの強調」「SolverPanelの
+// 矛盾アラート」など、エラーの発生源は複数あるが、UI側の「クリック→
+// スクロール→一時強調→自動解除」という振る舞いはすべて同一であるべき、
+// という方針のもとに作る型。HintLineFocusTarget（行/列の位置）に加えて、
+// 「何が原因でフォーカスされたか」を表す source を持たせることで、将来
+// エラー種別ごとに表示メッセージや強調色を分けたくなった場合にも、
+// target の構造自体は変えずに拡張できるようにしておく。
+// ----------------------------------------------------------------------------
+
+/** エラーフォーカスの発生源。表示メッセージや将来の強調色分けの拡張点として保持する。 */
+export type HintErrorSource = 'validation' | 'solver-contradiction' | 'solver-unsolvable';
+
+/** useErrorFocus が管理する「現在強調表示すべき対象」。target が null のときは何も強調しない。 */
+export interface HintErrorFocus extends HintLineFocusTarget {
+  readonly source: HintErrorSource;
+  /**
+   * 同じ (type, index) への再クリックでも確実にハイライトが再発火するよう、
+   * クリックごとに一意な値を持たせる（PicrossBoard 側はこれを useEffect の
+   * 依存値として見て、同一ターゲットの連続クリックでも毎回スクロール+
+   * 再ハイライトを行う）。
+   */
+  readonly requestId: number;
+}

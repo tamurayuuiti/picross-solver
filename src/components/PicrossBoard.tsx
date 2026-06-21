@@ -2,35 +2,37 @@
 // PicrossBoard.tsx
 // 列ヒント（上）/ 行ヒント（左）/ 盤面（右下）をまとめた表示コンポーネント。
 //
-// 変更点（ヒントセルの「表示/編集モード」切り替え方式への再構築）:
-// - 従来は1ヒント値=1<input>セルの直接編集方式だったが、以下の課題があった。
-//     - ヒント値の追加・削除がしづらい（セル数が固定的で、増減の操作余地がない）
-//     - スマホでは Tab/Enter/Space によるセル間移動が機能せず、操作効率が悪い
-// - そこで、1行（行ヒント）/1列（列ヒント）を編集の最小単位とし、
-//   「通常時は読み取り専用のバッジ表示 [3][1][2]」⇄「クリックでテキスト編集
-//   モードに切り替わり、その行/列だけが '3 1 2' 形式のテキスト入力になる」
-//   という2モードのコンポーネント（HintLineUnit）に置き換えた。
-//   テキスト編集モードであれば、ヒント値の個数そのものを自由に増減できる
-//   （スペース区切りでトークンを増減するだけ）うえ、スマホの標準的な
-//   テキスト入力フローに乗るため、Tab/Enter移動の問題が発生しない。
-// - 編集モードへの遷移はクリック（onClick）/フォーカス（onFocus）の両方で
-//   発生させ、PC・タッチ操作のどちらでも自然に入れるようにする。
-// - 確定（編集モード→表示モードへの復帰）は blur または Enter キーで行う。
-//   blurで自動確定するため、「確定ボタン」を別途設けず操作の手数を増やさない。
-// - 編集中の生テキストは HintLineUnit のローカル state として保持し、
-//   1文字ごとに親（rowHints/colHints）へ反映する。これにより、編集中も
-//   盤面側の表示（他の行/列のヒントやエラー状態）がリアルタイムに連動する。
+// 変更点（エラー表示・ジャンプ・ハイライトの統合再設計）:
+// - focusTarget（行/列の位置だけを持つ素朴な値）を廃止し、App.tsx の
+//   useErrorFocus が一元管理する HintErrorFocus（行/列位置 + 発生源 +
+//   requestId）をそのまま受け取る。発生源がテキスト入力欄か、SolverPanel
+//   の矛盾アラートか、盤面自身かに関わらず、ここでの処理（スクロール+
+//   一時ハイライト）は完全に同一になる。
+// - 強調表示（エラー枠・フォーカス枠）を border 依存から outline 依存に
+//   変更した。理由:
+//     - このコンポーネントは「5マスごとの太線」「ヒントグリッド最外周」
+//       など、border-* を罫線の意味で多重に使っている。エラー時に
+//       borderColor を上書きする方式では、罫線の太さや左右非対称な
+//       border-width 指定（中間境界線は片側のセルだけが描く設計）と
+//       衝突し、「一部の辺だけ赤くならない」問題の温床になっていた。
+//     - outline はレイアウト幅に影響せず、border の外側に独立した
+//       矩形を描く。罫線の太さ・色の設計に一切手を入れずに、常に
+//       「四辺が揃った1本の枠」を保証できる。
+//     - エラー枠（赤）とフォーカス枠（青）は意味の異なる強調なので、
+//       重ねて表示できるよう outline-offset を変えて二重に描く。
 //
-// 変更点（エラー強調の統一化）:
-// - 従来は「総和オーバー時、空白パディングセルだけが強調され、実際の
-//   ヒント値セルの境界の一部が強調から漏れる」ケースがあった
-//   （borderColorをセルごとに個別指定していたため、隣接セル境界の
-//   片側だけ赤くなる箇所が生じていた）。
-// - 今回、ヒントセルは「行/列全体を1つの視覚的まとまり（HintLineUnit）」
-//   として描画するようにしたため、エラー時は外枠1つを赤くするだけで
-//   行/列全体が統一感のある強調表示になる（内部セル境界の色分けに依存しない）。
+// 変更点（ヒント編集UIのポップオーバー化）:
+// - 従来は HintLineUnit 自身がインライン編集（その場でテキスト入力に
+//   変身する）方式だったが、列ヒント（縦長・幅が CELL_PX 固定で狭い）
+//   では入力欄が窮屈になりがちだった。
+// - 行・列どちらも同じ挙動に統一するため、「クリックで小さな編集
+//   ポップオーバーを浮かせる」方式に揺集約した。ポップオーバーは
+//   常に横長のテキスト入力（行ヒントと同じ "3 1 2" 形式）として表示する
+//   ため、列ヒントであっても狭いセル内に押し込まれず入力しやすい。
+// - ポップオーバーの外側クリック・Escapeキー・Enterキーで確定し、表示
+//   モードに戻る。確定ロジック（parseLineText）は変更していない。
 //
-// 既存の変更点（5マス区切り + 盤面外枠強化 + 罫線統一ロジック）:
+// 既存の変更点（5マス区切り + 盤面外枠強化 + 罫線統一ロジック、変更なし）:
 // - 罫線太さの決定を isMajorLine / borderWeightPx という単一の純粋関数に
 //   集約し、盤面・行ヒント・列ヒントが同じ関数を同じ引数で呼ぶ。
 // - セルサイズ(CELL_PX)自体は変更しない。
@@ -53,6 +55,8 @@ import type {
   CellValue,
   Grid,
   HintCellError,
+  HintErrorFocus,
+  HintErrorSource,
   HintLineError,
   HintLineFocusTarget,
   HintLines,
@@ -90,10 +94,24 @@ const BOARD_OUTER_BORDER_COLOR = '#475569'; // slate-600相当
 /** ヒントグリッドの罫線色（主軸・直交軸とも共通、交点ブロックも同色） */
 const HINT_BORDER_COLOR = '#cbd5e1'; // slate-300相当
 
-/** エラーがあるヒントセルの枠線色（彩度を抑えた赤、過剰に目立たせないため枠線のみで表現） */
-const HINT_ERROR_BORDER_COLOR = '#ef4444'; // red-500相当
+/**
+ * エラーがあるヒントセルの強調色（彩度を抑えた赤）。
+ * outline で描くため、罫線（border）の太さ・色設計には一切影響しない。
+ */
+const HINT_ERROR_OUTLINE_COLOR = '#ef4444'; // red-500相当
 /** エラーがあるヒントセルの背景色（薄い赤、文字は読める程度の薄さに留める） */
 const HINT_ERROR_BG_CLASS = 'bg-red-50';
+
+/**
+ * エラージャンプによる一時的な強調色（青）。エラー色（赤）とは別軸の
+ * 「現在地」表示であり、エラーが同時に存在する場合は外側にもう1本
+ * 重ねて描く（outline-offset をずらすことで2本の枠が干渉しない）。
+ */
+const FOCUS_OUTLINE_COLOR = '#2563eb'; // blue-600相当
+
+// ----------------------------------------------------------------------------
+// 罫線太さ判定（既存ロジック、変更なし）
+// ----------------------------------------------------------------------------
 
 /**
  * 「このインデックスのセルの右側 / 下側」に太線を引くべきか。
@@ -142,12 +160,19 @@ interface PicrossBoardProps {
   /** 行/列単位エラー（総和オーバー等）。row/col両方を含む。 */
   readonly lineErrors?: readonly HintLineError[];
   /**
-   * エラー一覧等から「この行/列に注目してほしい」という外部からの指示。
-   * 変化を検知すると、該当する HintLineUnit が自動でスクロール表示され、
-   * 一時的に強いハイライト（ピンポイント注目色）を点灯させる。
-   * App.tsx 側の「エラー行へジャンプ」ボタンから渡される。
+   * 現在強調表示すべき対象（App.tsx の useErrorFocus が一元管理）。
+   * テキスト入力欄・SolverPanelの矛盾アラート・盤面自身のどこから来た
+   * ジャンプ要求でも、同じ型・同じ処理でスクロール+一時ハイライトされる。
    */
-  readonly focusTarget?: HintLineFocusTarget | null;
+  readonly focus?: HintErrorFocus | null;
+  /**
+   * 盤面側ヒントセル自身からのジャンプ要求（将来拡張用）。現在の
+   * HintLineUnit は自分自身が focus 対象になることはあっても、自分から
+   * 他の対象をフォーカスさせる導線は持たないため未使用だが、
+   * 「すべてのエラー表示は同じ入口を呼ぶ」という統一方針を満たすために
+   * 型としては受け取れるようにしておく。
+   */
+  readonly onRequestFocus?: (target: HintLineFocusTarget, source: HintErrorSource) => void;
 }
 
 /** 1行/1列にセルエラーが1件でも存在するかを判定する。 */
@@ -200,27 +225,134 @@ function replaceLine(lines: HintLines, lineIndex: number, newLine: number[]): Hi
   return lines.map((line, i) => (i === lineIndex ? newLine : line));
 }
 
+// ----------------------------------------------------------------------------
+// 強調表示（エラー枠・フォーカス枠）の組み立て
+// outline-* は border-* と独立したレイヤーのため、5マス区切りの罫線設計
+// （borderWeightPx）に一切影響を与えずに「常に四辺が綺麗な1本の枠」を
+// 描ける。エラーとフォーカスが同時に発生した場合は、outline-offset を
+// ずらした2本の枠（内側=赤のエラー枠、外側=青のフォーカス枠）として
+// 重ねる。
+// ----------------------------------------------------------------------------
+function highlightStyle(hasError: boolean, isFocused: boolean): CSSProperties {
+  if (hasError && isFocused) {
+    return {
+      outline: `2px solid ${HINT_ERROR_OUTLINE_COLOR}`,
+      outlineOffset: '-2px',
+      boxShadow: `0 0 0 4px ${FOCUS_OUTLINE_COLOR}`,
+    };
+  }
+  if (hasError) {
+    return { outline: `2px solid ${HINT_ERROR_OUTLINE_COLOR}`, outlineOffset: '-2px' };
+  }
+  if (isFocused) {
+    return { boxShadow: `0 0 0 3px ${FOCUS_OUTLINE_COLOR}` };
+  }
+  return {};
+}
+
+// ----------------------------------------------------------------------------
+// 編集ポップオーバー
+// 行ヒント・列ヒントの双方が同一のコンポーネントを使う。常に横長の
+// テキスト入力として表示するため、列ヒントの「縦長で狭い」という制約に
+// 入力欄の使いやすさが左右されない。
+// ----------------------------------------------------------------------------
+function HintEditPopover({
+  orientation,
+  initialText,
+  onCommit,
+  onCancel,
+}: {
+  readonly orientation: 'row' | 'col';
+  readonly initialText: string;
+  readonly onCommit: (text: string) => void;
+  readonly onCancel: () => void;
+}) {
+  const [draftText, setDraftText] = useState(initialText);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  // ポップオーバー外側のクリックで確定する（テキストフィールドのblurと
+  // 同じ「確定」扱い。キャンセルではない点に注意: 入力中の内容を失わない）。
+  useEffect(() => {
+    const handlePointerDown = (e: PointerEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        onCommit(draftText);
+      }
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+    // draftText が変わるたびにリスナーを再登録し、外側クリック時点の
+    // 最新テキストを確実に確定できるようにする。
+  }, [draftText, onCommit]);
+
+  return (
+    <div
+      ref={popoverRef}
+      className="absolute z-40 rounded border border-slate-400 bg-white p-1.5 shadow-lg"
+      style={{
+        // 行ヒントは右側、列ヒントは下側にポップオーバーを開く。
+        // どちらの軸でも横長の入力欄として表示するため、狭いセル内に
+        // 押し込まれることがない。
+        top: orientation === 'col' ? '100%' : 0,
+        left: orientation === 'col' ? 0 : '100%',
+        marginTop: orientation === 'col' ? 4 : 0,
+        marginLeft: orientation === 'col' ? 0 : 4,
+      }}
+    >
+      <input
+        ref={inputRef}
+        type="text"
+        inputMode="numeric"
+        value={draftText}
+        onChange={(e) => setDraftText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            onCommit(draftText);
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            onCancel();
+          }
+        }}
+        className="w-28 rounded border border-slate-300 px-2 py-1 text-center font-mono text-sm outline-none ring-2 ring-inset ring-slate-600 focus:ring-slate-700"
+        placeholder="3 1 2"
+      />
+      <p className="mt-1 text-center text-[10px] text-slate-400">Enterで確定 / Escでキャンセル</p>
+    </div>
+  );
+}
+
 /**
  * 1行（行ヒント）または1列（列ヒント）を、表示モード(バッジ)/編集モード
- * (テキスト入力)の2状態で描画する最小編集単位。
+ * (ポップオーバーのテキスト入力)の2状態で描画する最小編集単位。
  *
  * 表示モード:
  * - maxLen 個分のスロットを確保し、値がある位置だけ "[3]" のような
  *   バッジを表示する（値がない先頭側のスロットは空白のまま、これは
  *   ヒントの「右詰め/下詰め」表示という既存仕様を維持するため）。
- * - クリックすると編集モードに入る。
+ * - クリックすると編集ポップオーバーが開く。
  *
- * 編集モード:
- * - 行/列全体を1つのテキストフィールドとして表示し、"3 1 2" のような
- *   スペース区切りで自由に編集できる。ヒント値の増減もここで自然に行える。
- * - blur または Enter キーで確定し、パース結果を親（onChange）に伝えて
- *   表示モードに戻る。Escapeキーで編集前の内容を破棄してキャンセルできる。
+ * 編集モード（ポップオーバー）:
+ * - HintLineUnit 自体の上に絶対配置で浮かせ、常に横長のテキスト入力
+ *   として "3 1 2" 形式を編集できる。行・列どちらでも同じ見た目・同じ
+ *   操作感になるよう統一した（列ヒントだけ縦長の窮屈な入力になる、と
+ *   いった不揺一さがなくなる）。
+ * - Enterキー・外側クリックで確定し、パース結果を親（onChange）に伝えて
+ *   ポップオーバーを閉じる。Escapeキーで編集前の内容を破棄してキャンセル
+ *   できる。
  *
  * 罫線・サイズ:
  * - outerStyle（このユニット全体の外枠）と、isMajor（5マス区切りの太線か）
  *   を呼び出し側（ColHints/RowHints）から受け取り、ユニット全体の外枠と
  *   して描画する。内部のヒント値どうしの境界線は描かない（バッジ自体の
- *   見た目で区切りを表現するため、エラー時も外枠1本の強調で済む）。
+ *   見た目で区切りを表現するため）。
+ * - エラー強調・フォーカス強調は outline / box-shadow（highlightStyle）で
+ *   描くため、この外枠（border）の罫線設計には一切影響しない。
  */
 function HintLineUnit({
   orientation,
@@ -244,104 +376,66 @@ function HintLineUnit({
   unitRef?: (el: HTMLDivElement | null) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [draftText, setDraftText] = useState(() => serializeLine(line));
-  const inputRef = useRef<HTMLInputElement>(null);
 
-  // 外部（solver側の再生機能等）から line が変わった場合、編集中でなければ
-  // draftText を追従させる（編集中に上書きすると入力中の文字が消えてしまうため）。
-  useEffect(() => {
-    if (!editing) setDraftText(serializeLine(line));
-  }, [line, editing]);
+  const startEditing = () => setEditing(true);
 
-  const startEditing = () => {
-    setDraftText(serializeLine(line));
-    setEditing(true);
-  };
-
-  const commit = () => {
-    onChange(parseLineText(draftText));
+  const commit = (text: string) => {
+    onChange(parseLineText(text));
     setEditing(false);
   };
 
-  const cancel = () => {
-    setDraftText(serializeLine(line));
-    setEditing(false);
-  };
-
-  useEffect(() => {
-    if (editing) inputRef.current?.focus();
-  }, [editing]);
+  const cancel = () => setEditing(false);
 
   const isVertical = orientation === 'col';
   const sizePx = maxLen * CELL_PX;
 
   const containerStyle: CSSProperties = {
     ...outerStyle,
+    ...highlightStyle(hasError, isFocused),
     width: isVertical ? CELL_PX : sizePx,
     height: isVertical ? sizePx : CELL_PX,
     boxSizing: 'border-box',
     position: 'relative',
   };
 
-  // エラー強調は外枠（containerStyle）の borderColor を一括で赤くするだけで
-  // 行/列全体が統一感をもって強調される（内部セル単位の塗り分けに依存しない）。
-  if (hasError) {
-    containerStyle.borderColor = HINT_ERROR_BORDER_COLOR;
-  }
-  // エラージャンプによる一時的な強調（青系、エラー色とは別軸の「現在地」表示）。
-  const focusRingClass = isFocused ? 'ring-2 ring-inset ring-blue-500' : '';
-
   return (
     <div
       ref={unitRef}
       style={containerStyle}
       title={errorTitle ?? undefined}
-      className={`${hasError ? HINT_ERROR_BG_CLASS : 'bg-white'} ${focusRingClass}`}
+      className={hasError ? HINT_ERROR_BG_CLASS : 'bg-white'}
     >
-      {editing ? (
-        <input
-          ref={inputRef}
-          type="text"
-          inputMode="numeric"
-          value={draftText}
-          onChange={(e) => setDraftText(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              commit();
-            } else if (e.key === 'Escape') {
-              e.preventDefault();
-              cancel();
-            }
-          }}
-          className="absolute inset-0 h-full w-full bg-white text-center font-mono text-xs outline-none ring-2 ring-inset ring-slate-600 sm:text-sm"
-          placeholder={orientation === 'row' ? '3 1 2' : '3\n1\n2'}
+      <button
+        type="button"
+        onClick={startEditing}
+        title={errorTitle ?? `クリックして編集（${orientation === 'row' ? '行' : '列'}全体をテキストで編集できます）`}
+        className={`flex h-full w-full items-center justify-center ${
+          isVertical ? 'flex-col' : 'flex-row'
+        } gap-0.5 px-0.5 py-0.5 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400`}
+      >
+        {line.length === 0 ? (
+          <span className="text-[11px] text-slate-300">―</span>
+        ) : (
+          line.map((value, i) => (
+            <span
+              key={i}
+              className={`rounded px-1 font-mono text-[11px] leading-tight sm:text-xs ${
+                hasError ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'
+              }`}
+            >
+              {value}
+            </span>
+          ))
+        )}
+      </button>
+
+      {editing && (
+        <HintEditPopover
+          orientation={orientation}
+          initialText={serializeLine(line)}
+          onCommit={commit}
+          onCancel={cancel}
         />
-      ) : (
-        <button
-          type="button"
-          onClick={startEditing}
-          title={errorTitle ?? `クリックして編集（${orientation === 'row' ? '行' : '列'}全体をテキストで編集できます）`}
-          className={`flex h-full w-full items-center justify-center ${
-            isVertical ? 'flex-col' : 'flex-row'
-          } gap-0.5 px-0.5 py-0.5 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400`}
-        >
-          {line.length === 0 ? (
-            <span className="text-[11px] text-slate-300">―</span>
-          ) : (
-            line.map((value, i) => (
-              <span
-                key={i}
-                className={`rounded px-1 font-mono text-[11px] leading-tight sm:text-xs ${
-                  hasError ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'
-                }`}
-              >
-                {value}
-              </span>
-            ))
-          )}
-        </button>
       )}
     </div>
   );
@@ -362,7 +456,7 @@ function ColHints({
   onChange,
   cellErrors = [],
   lineErrors = [],
-  focusTarget,
+  focus,
   unitRefs,
 }: {
   colHints: HintLines;
@@ -371,7 +465,7 @@ function ColHints({
   onChange: (lines: HintLines) => void;
   cellErrors?: readonly HintCellError[];
   lineErrors?: readonly HintLineError[];
-  focusTarget?: HintLineFocusTarget | null;
+  focus?: HintErrorFocus | null;
   unitRefs?: MutableRefObject<Map<string, HTMLDivElement>>;
 }) {
   return (
@@ -387,7 +481,7 @@ function ColHints({
         const lineErr = findLineError(lineErrors, 'col', lineIndex);
         const cellErrSummary = cellErrorSummary(cellErrors, lineIndex);
         const errorTitle = [cellErrSummary, lineErr?.message].filter(Boolean).join(' / ') || null;
-        const isFocused = focusTarget?.type === 'col' && focusTarget.index === lineIndex;
+        const isFocused = focus?.type === 'col' && focus.index === lineIndex;
 
         const outerStyle: CSSProperties = {
           boxSizing: 'border-box',
@@ -437,7 +531,7 @@ function RowHints({
   onChange,
   cellErrors = [],
   lineErrors = [],
-  focusTarget,
+  focus,
   unitRefs,
 }: {
   rowHints: HintLines;
@@ -446,7 +540,7 @@ function RowHints({
   onChange: (lines: HintLines) => void;
   cellErrors?: readonly HintCellError[];
   lineErrors?: readonly HintLineError[];
-  focusTarget?: HintLineFocusTarget | null;
+  focus?: HintErrorFocus | null;
   unitRefs?: MutableRefObject<Map<string, HTMLDivElement>>;
 }) {
   return (
@@ -462,7 +556,7 @@ function RowHints({
         const lineErr = findLineError(lineErrors, 'row', lineIndex);
         const cellErrSummary = cellErrorSummary(cellErrors, lineIndex);
         const errorTitle = [cellErrSummary, lineErr?.message].filter(Boolean).join(' / ') || null;
-        const isFocused = focusTarget?.type === 'row' && focusTarget.index === lineIndex;
+        const isFocused = focus?.type === 'row' && focus.index === lineIndex;
 
         const outerStyle: CSSProperties = {
           boxSizing: 'border-box',
@@ -546,7 +640,7 @@ export function PicrossBoard({
   rowCellErrors,
   colCellErrors,
   lineErrors,
-  focusTarget,
+  focus,
 }: PicrossBoardProps) {
   const rows = rowHints.length;
   const cols = colHints.length;
@@ -560,16 +654,19 @@ export function PicrossBoard({
       : Array.from({ length: rows }, () => Array.from({ length: cols }, () => -1 as CellValue));
 
   // ColHints/RowHints が描画する各 HintLineUnit の DOM ノードを
-  // "row-3" / "col-7" のようなキーで保持しておく。focusTarget が変化した
+  // "row-3" / "col-7" のようなキーで保持しておく。focus が変化した
   // ときに該当ノードへ scrollIntoView するための参照表。
   const unitRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   useEffect(() => {
-    if (!focusTarget) return;
-    const key = `${focusTarget.type}-${focusTarget.index}`;
+    if (!focus) return;
+    const key = `${focus.type}-${focus.index}`;
     const el = unitRefs.current.get(key);
     el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
-  }, [focusTarget]);
+    // focus.requestId を依存値に含めることで、同じ (type, index) への
+    // 再クリックでも確実にスクロールが再発火する
+    // （useErrorFocus 側が毎回新しい requestId を発行するため）。
+  }, [focus?.type, focus?.index, focus?.requestId]);
 
   return (
     // 単一スクロールコンテナ: 盤面・行ヒント・列ヒント・交点はすべてこの中に存在する。
@@ -585,7 +682,7 @@ export function PicrossBoard({
           onChange={onColHintsChange}
           cellErrors={colCellErrors}
           lineErrors={lineErrors}
-          focusTarget={focusTarget}
+          focus={focus}
           unitRefs={unitRefs}
         />
         <RowHints
@@ -595,7 +692,7 @@ export function PicrossBoard({
           onChange={onRowHintsChange}
           cellErrors={rowCellErrors}
           lineErrors={lineErrors}
-          focusTarget={focusTarget}
+          focus={focus}
           unitRefs={unitRefs}
         />
         {/* 盤面本体: 固定DOM。罫線太さはborderWeightPxで行・列ヒントと同一判定。

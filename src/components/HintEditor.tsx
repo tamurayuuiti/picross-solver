@@ -21,10 +21,11 @@
 // - 「エラーがある行番号」をクリックすると、その行にカーソルを移動し
 //   textareaをフォーカスする（setSelectionRange）。これは「テキスト側で
 //   該当行を把握する」という補助用途を実現する最小限の実装であり、
-//   将来的に「盤面側のヒントセルへもジャンプする」という拡張が必要に
-//   なった場合は、onJumpToLine コールバックをApp.tsx側に伝播させ、
-//   PicrossBoard の focusTarget と連動させる形で拡張できる
-//   （実際に下記 onRequestFocus で実装している）。
+//   盤面側ヒントセルへも同時にジャンプ＋一時ハイライトさせる部分は
+//   onRequestFocus を通じて App.tsx の useErrorFocus（エラージャンプ・
+//   ハイライトを一元管理する共通フック）にそのまま委譲する。
+//   これにより、テキスト側のエラークリックも、SolverPanel側の矛盾アラート
+//   のクリックも、最終的に同じ仕組みで同じように振る舞う。
 //
 // 単一の状態管理方針（変更なし）:
 // - 真の状態（lines: HintLines）は親（App.tsx）が保持し、ここでは props
@@ -161,8 +162,8 @@ export function HintEditor({
    * 指定した行番号(0-based)へジャンプする。
    * - テキスト側: その行の先頭〜末尾を selectionRange で選択し、textareaへ
    *   フォーカスする（「この行を見ている」ことが視覚的に伝わる）。
-   * - 盤面側: onRequestFocus を呼び、PicrossBoard の focusTarget を更新して
-   *   該当 HintLineUnit までスクロールジャンプ＋一時ハイライトさせる。
+   * - 盤面側: onRequestFocus を呼び、App.tsx の useErrorFocus 経由で
+   *   PicrossBoard 側の対象行/列までスクロールジャンプ＋一時ハイライトさせる。
    */
   const jumpToLine = (lineIndex: number) => {
     const textLines = text.split('\n');

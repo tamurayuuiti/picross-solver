@@ -26,12 +26,13 @@
 // ============================================================================
 
 import { useMemo, useState } from 'react';
-import type { Grid, HintLineFocusTarget, HintLines, SolvedGrid } from '@/types';
+import type { Grid, HintLines, SolvedGrid } from '@/types';
 import { HintEditor } from '@/components/HintEditor';
 import { SolverPanel } from '@/components/SolverPanel';
 import { BoardPreview } from '@/components/BoardPreview';
 import { PRESETS } from '@/presets';
 import { validateHints } from '@/validation/hintValidation';
+import { useErrorFocus } from '@/hooks/useErrorFocus';
 
 const MIN_SIZE = 1;
 const MAX_SIZE = 100;
@@ -65,12 +66,13 @@ export default function App() {
 
   /**
    * 「エラー一覧/エラー行番号から、盤面側ヒントセルへジャンプする」ための
-   * 注目対象。HintEditor のエラー行クリック等から更新され、PicrossBoard に
-   * そのまま渡してスクロールジャンプ＋一時ハイライトを発生させる。
-   * 同じ行が再クリックされても確実に再発火するよう、毎回新しいオブジェクト
-   * 参照として更新する（PicrossBoard側はuseEffectの依存配列でこれを見る）。
+   * 注目対象を一元管理する共通フック。テキスト入力欄のエラー一覧、
+   * SolverPanel側の矛盾アラート・解なしアラート、盤面側ヒントセル自身の
+   * どこからクリックされても、同じ requestFocus を呼ぶだけでよい。
+   * ハイライトの自動解除・前回ハイライトのクリアもこのフックが一元的に
+   * 保証するため、「青枠が残留する」状態は構造的に発生しない。
    */
-  const [focusTarget, setFocusTarget] = useState<HintLineFocusTarget | null>(null);
+  const { focus, requestFocus } = useErrorFocus();
 
   // ----------------------------------------------------------------------------
   // ヒント入力の静的検証（solvePicrossを呼ぶ前に判定できるエラー）。
@@ -187,7 +189,7 @@ export default function App() {
                   onChange={setRowHints}
                   cellErrors={validation.rowCellErrors}
                   lineErrors={validation.lineErrors}
-                  onRequestFocus={setFocusTarget}
+                  onRequestFocus={(target) => requestFocus(target, 'validation')}
                 />
                 <HintEditor
                   title="列ヒント"
@@ -196,7 +198,7 @@ export default function App() {
                   onChange={setColHints}
                   cellErrors={validation.colCellErrors}
                   lineErrors={validation.lineErrors}
-                  onRequestFocus={setFocusTarget}
+                  onRequestFocus={(target) => requestFocus(target, 'validation')}
                 />
               </div>
             </section>
@@ -219,7 +221,8 @@ export default function App() {
             onColHintsChange={setColHints}
             onGridChange={setCurrentGrid}
             validation={validation}
-            focusTarget={focusTarget}
+            focus={focus}
+            onRequestFocus={requestFocus}
           />
         </main>
       </div>

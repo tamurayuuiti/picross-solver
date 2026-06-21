@@ -26,6 +26,8 @@ import { useEffect, useRef, useState } from 'react';
 import type {
   Grid,
   HintCellError,
+  HintErrorFocus,
+  HintErrorSource,
   HintErrorTarget,
   HintLineFocusTarget,
   HintLines,
@@ -53,8 +55,18 @@ interface SolverPanelProps {
   readonly onGridChange?: (grid: Grid | SolvedGrid | null) => void;
   /** App.tsx で計算された静的検証結果。solve実行のブロック判定・エラー表示に使う。 */
   readonly validation: HintValidationWithCellSplit;
-  /** エラー一覧等からの「この行/列に注目」指示。PicrossBoardへそのまま橋渡しする。 */
-  readonly focusTarget?: HintLineFocusTarget | null;
+  /**
+   * 現在強調表示すべき対象（App.tsx の useErrorFocus が一元管理）。
+   * テキスト入力欄・盤面側ヒントセル・このパネル内の矛盾アラートの
+   * いずれからのジャンプ要求でも、同じ focus を見て同じ強調表示を行う。
+   */
+  readonly focus?: HintErrorFocus | null;
+  /**
+   * エラー表示（矛盾アラート・解なしアラート）からのジャンプ要求の入口。
+   * App.tsx の requestFocus をそのまま受け取り、PicrossBoard 側のクリックと
+   * 完全に同じ経路でフォーカスを発生させる。
+   */
+  readonly onRequestFocus?: (target: HintLineFocusTarget, source: HintErrorSource) => void;
 }
 
 function statusLabel(status: string): string {
@@ -153,13 +165,24 @@ function StaticErrorBanner({ validation }: { readonly validation: HintValidation
 // 矛盾アラート
 // 「結果確認」フェーズの一部として、操作バー直下に常時表示（発生時のみ）。
 // 折りたたみにしない理由: エラーは気づく必要があるため。
+//
+// 変更点（エラージャンプの統一）:
+// - target が分かっている場合（矛盾検出時）は、テキスト入力欄のエラー一覧
+//   と全く同じ requestFocus(target, source) を呼ぶ「ここに移動」ボタンを
+//   表示する。表示場所がテキスト欄か盤面かSolverPanelかに関わらず、
+//   クリック後に起きること（スクロール→強調→自動解除）は1つの仕組み
+//   （useErrorFocus）に統一されているため、挙動の差は生まれない。
 // ----------------------------------------------------------------------------
 function ContradictionAlert({
   message,
   target,
+  source,
+  onRequestFocus,
 }: {
   readonly message: string;
   readonly target?: HintErrorTarget;
+  readonly source: HintErrorSource;
+  readonly onRequestFocus?: (target: HintLineFocusTarget, source: HintErrorSource) => void;
 }) {
   const targetLabel = target
     ? target.type === 'row'
@@ -174,7 +197,20 @@ function ContradictionAlert({
       </span>
       <div className="space-y-0.5">
         <p className="font-medium">{message}</p>
-        {targetLabel && <p className="text-xs text-red-600">矛盾箇所: {targetLabel}</p>}
+        {targetLabel && (
+          <p className="flex items-center gap-2 text-xs text-red-600">
+            <span>矛盾箇所: {targetLabel}</span>
+            {target && onRequestFocus && (
+              <button
+                type="button"
+                onClick={() => onRequestFocus(target, source)}
+                className="rounded border border-red-300 bg-white px-2 py-0.5 font-medium text-red-700 underline-offset-2 hover:bg-red-100 hover:underline"
+              >
+                ここに移動
+              </button>
+            )}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -408,7 +444,8 @@ export function SolverPanel({
   onColHintsChange,
   onGridChange,
   validation,
-  focusTarget,
+  focus,
+  onRequestFocus,
 }: SolverPanelProps) {
   const { status, grid, message, target, count, stats, solvedBy, frames, solve, reset } = useSolver();
 
@@ -500,12 +537,20 @@ export function SolverPanel({
 
       {/* 結果確認: 矛盾アラート（発生時のみ、常時表示） */}
       {status === 'contradiction' && message && (
-        <ContradictionAlert message={message} target={target} />
+        <ContradictionAlert
+          message={message}
+          target={target}
+          source="solver-contradiction"
+          onRequestFocus={onRequestFocus}
+        />
       )}
-      {status === 'invalid-hints' && message && <ContradictionAlert message={message} />}
+      {status === 'invalid-hints' && message && (
+        <ContradictionAlert message={message} source="solver-contradiction" />
+      )}
       {status === 'unsolvable' && (
         <ContradictionAlert
           message="入力されたヒントの組み合わせでは、条件を満たす盤面が存在しません（全探索済み）"
+          source="solver-unsolvable"
         />
       )}
 
@@ -519,7 +564,8 @@ export function SolverPanel({
         rowCellErrors={validation.rowCellErrors}
         colCellErrors={validation.colCellErrors}
         lineErrors={validation.lineErrors}
-        focusTarget={focusTarget}
+        focus={focus}
+        onRequestFocus={onRequestFocus}
       />
 
       {/* 【修正点】解答再生: 折りたたみ（solved/unsolvable時のみ表示候補）
