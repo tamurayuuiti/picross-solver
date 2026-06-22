@@ -54,24 +54,35 @@ interface SolverPanelProps {
 
 function statusLabel(status: string): string {
   switch (status) {
-    case 'idle': return '待機中';
-    case 'running': return '解析中...';
-    case 'solved': return '解けました';
-    case 'unsolvable': return '解なし';
-    case 'contradiction': return 'ヒントに矛盾';
-    case 'invalid-hints': return 'ヒントが不正';
-    default: return status;
+    case 'idle':
+      return '待機中';
+    case 'running':
+      return '解析中...';
+    case 'solved':
+      return '解けました';
+    case 'unsolvable':
+      return '解なし';
+    case 'contradiction':
+      return 'ヒントに矛盾';
+    case 'invalid-hints':
+      return 'ヒントが不正';
+    default:
+      return status;
   }
 }
 
 function statusDotTone(status: string): 'success' | 'progress' | 'danger' | 'neutral' {
   switch (status) {
-    case 'solved': return 'success';
-    case 'running': return 'progress';
+    case 'solved':
+      return 'success';
+    case 'running':
+      return 'progress';
     case 'unsolvable':
     case 'contradiction':
-    case 'invalid-hints': return 'danger';
-    default: return 'neutral';
+    case 'invalid-hints':
+      return 'danger';
+    default:
+      return 'neutral';
   }
 }
 
@@ -83,10 +94,14 @@ function phaseLabel(phase: ReplayFrame['phase']): string {
 
 function frameTypeLabel(type: ReplayFrame['type']): string {
   switch (type) {
-    case 'progress': return '探索中';
-    case 'solved': return '解確定';
-    case 'contradiction': return '矛盾検出';
-    default: return type;
+    case 'progress':
+      return '探索中';
+    case 'solved':
+      return '解確定';
+    case 'contradiction':
+      return '矛盾検出';
+    default:
+      return type;
   }
 }
 
@@ -425,7 +440,10 @@ export function SolverPanel({
 
       <Card>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="primary" onClick={handleSolve} disabled={!canSolve}
+          <Button
+            variant="primary"
+            onClick={handleSolve}
+            disabled={!canSolve}
             title={canSolve ? undefined : '入力エラーを修正してから実行してください'}
           >
             解く

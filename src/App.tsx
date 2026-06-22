@@ -40,7 +40,7 @@ export default function App() {
   const [colHints, setColHints] = useState<HintLines>(() => createEmptyHintLines(DEFAULT_COLS));
   const [currentGrid, setCurrentGrid] = useState<Grid | SolvedGrid | null>(null);
 
-  // 【ヒント主導設計】ヒントの行数がそのまま盤面サイズになる
+  // ヒント主導設計: ヒントの行数がそのまま盤面サイズになる
   const rows = rowHints.length;
   const cols = colHints.length;
 
