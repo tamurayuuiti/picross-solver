@@ -75,7 +75,7 @@ export default function App() {
         <aside className="order-1 flex-none overflow-y-auto bg-slate-50 p-4 md:w-80 md:p-5">
           <div className="space-y-4">
             <Card>
-              <SectionHeading>開発用プリセット</SectionHeading>
+              <SectionHeading>プリセット</SectionHeading>
               <div className="flex flex-wrap gap-2">
                 {PRESETS.map((preset) => (
                   <Button
