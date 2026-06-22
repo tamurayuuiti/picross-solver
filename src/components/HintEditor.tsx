@@ -44,7 +44,7 @@
 //   （slate-200の通常枠、エラー時はred-200+red-50背景）。
 // ============================================================================
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { HintCellError, HintLineError, HintLineFocusTarget, HintLines } from '@/types';
 import { findLineError, validateRawHintText } from '@/validation/hintValidation';
 import { Badge } from '@/components/ui';
@@ -121,17 +121,18 @@ export function HintEditor({
   onRequestFocus,
 }: HintEditorProps) {
   const [text, setText] = useState(() => serializeHintLines(lines));
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const lineNumberRef = useRef<HTMLDivElement>(null);
+  const [prevLines, setPrevLines] = useState(lines);
 
-  useEffect(() => {
-    const selfParsed = parseHintText(text);
-    if (!linesEqual(selfParsed, lines)) {
+  if (lines !== prevLines) {
+    setPrevLines(lines);
+
+    if (!linesEqual(parseHintText(text), lines)) {
       setText(serializeHintLines(lines));
     }
-    // text は依存配列から意図的に外す（自分自身の入力による再フォーマットを避ける）
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lines]);
+  }
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const lineNumberRef = useRef<HTMLDivElement>(null);
 
   const handleTextChange = (value: string) => {
     setText(value);

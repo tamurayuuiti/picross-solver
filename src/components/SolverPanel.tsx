@@ -385,10 +385,13 @@ export function SolverPanel({
   const [isPlaying, setIsPlaying] = useState(false);
   const intervalRef = useRef<number | null>(null);
 
-  useEffect(() => {
+  const [prevFrames, setPrevFrames] = useState(frames);
+
+  if (frames !== prevFrames) {
+    setPrevFrames(frames);
     setReplayIndex(Math.max(0, frames.length - 1));
     setIsPlaying(false);
-  }, [frames]);
+  }
 
   useEffect(() => {
     if (!isPlaying) {

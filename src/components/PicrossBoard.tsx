@@ -733,10 +733,7 @@ export function PicrossBoard({
     const key = `${focus.type}-${focus.index}`;
     const el = unitRefs.current.get(key);
     el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
-    // focus.requestId を依存値に含めることで、同じ (type, index) への
-    // 再クリックでも確実にスクロールが再発火する
-    // （useErrorFocus 側が毎回新しい requestId を発行するため）。
-  }, [focus?.type, focus?.index, focus?.requestId]);
+  }, [focus]);
 
   return (
     // 単一スクロールコンテナ: 盤面・行ヒント・列ヒント・交点はすべてこの中に存在する。
